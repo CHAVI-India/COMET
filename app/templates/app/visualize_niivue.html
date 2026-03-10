@@ -1,6 +1,6 @@
 {% extends 'app/base.html' %}
 
-{% block title %}WebGL Viewer - {{ patient.patient_id }}{% endblock %}
+{% block title %}NiiVue Viewer - {{ patient.patient_id }}{% endblock %}
 
 {% block content %}
 <div class="mb-4">
@@ -15,8 +15,8 @@
 <div class="card shadow mb-4">
     <div class="card-header bg-success text-white">
         <h4 class="mb-0">
-            <i class="bi bi-gpu-card me-2"></i>WebGL Viewer (GPU-Accelerated)
-            <span class="badge bg-light text-success ms-2">Fast</span>
+            <i class="bi bi-gpu-card me-2"></i>NiiVue Viewer
+            <span class="badge bg-light text-success ms-2">GPU-Accelerated</span>
         </h4>
     </div>
     <div class="card-body">
@@ -59,13 +59,16 @@
             <div class="col-md-12">
                 <div class="alert alert-info">
                     <i class="bi bi-info-circle me-2"></i>
-                    <strong>WebGL Viewer Benefits:</strong>
-                    <ul class="mb-0 mt-2">
-                        <li>⚡ <strong>Instant loading</strong> - No waiting for PNG generation</li>
-                        <li>🖱️ <strong>Interactive navigation</strong> - Scroll through slices in real-time</li>
-                        <li>🎨 <strong>Dynamic windowing</strong> - Adjust contrast on-the-fly</li>
-                        <li>💻 <strong>GPU-accelerated</strong> - Smooth rendering using your graphics card</li>
-                    </ul>
+                    <strong>Quick Start Guide:</strong>
+                    <ol class="mb-0 mt-2">
+                        <li><strong>Select ROIs</strong> from the left sidebar (check/uncheck structures to visualize)</li>
+                        <li><strong>Click "Load Visualization"</strong> to render the volumes</li>
+                        <li><strong>Navigation</strong>: Use the "Mode" button to toggle between Pan/Zoom and Slice Navigation modes</li>
+                        <li><strong>Adjust Window/Level</strong>: Use preset buttons (Brain, Bone, etc.) or manual sliders</li>
+                        <li><strong>Control Overlays</strong>: Individual opacity sliders and toggles appear below the canvas</li>
+                        <li><strong>Switch Views</strong>: Use "Slice Type" dropdown for Axial, Coronal, Sagittal, or Multi-planar views</li>
+                    </ol>
+                    <small class="text-muted d-block mt-2"><strong>Tip:</strong> For best performance, select 1-10 overlays at a time. Loading 20+ overlays may be slow.</small>
                 </div>
             </div>
         </div>
@@ -80,7 +83,11 @@
                         </div>
                         <div class="card-body">
                             <label class="form-label fw-bold">Select ROIs:</label>
-                            <div style="max-height: 250px; overflow-y: auto; margin-bottom: 1rem;">
+                            <div class="mb-2">
+                                <input type="text" class="form-control form-control-sm" id="roiSearchInput" 
+                                       placeholder="🔍 Search ROIs...">
+                            </div>
+                            <div id="roiListContainer" style="max-height: 250px; overflow-y: auto; margin-bottom: 1rem;">
                                 {% if rois %}
                                     {% for roi in rois %}
                                     <div class="form-check mb-2">
@@ -258,6 +265,16 @@
         </div>
     </div>
 
+<div class="card shadow mt-3">
+    <div class="card-body text-center py-2">
+        <small class="text-muted">
+            Powered by <a href="https://github.com/niivue/niivue" target="_blank" rel="noopener noreferrer"><strong>NiiVue</strong></a> 
+            - A WebGL-based medical image viewer | 
+            <a href="https://niivue.github.io/niivue/" target="_blank" rel="noopener noreferrer">Documentation</a>
+        </small>
+    </div>
+</div>
+
 <script type="module">
 import { Niivue } from "https://unpkg.com/@niivue/niivue@0.57.0/dist/index.js";
 
@@ -309,6 +326,27 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load visualization button
     document.getElementById('loadVisualization').addEventListener('click', loadNiiVueVisualization);
+    
+    // ROI search/filter functionality
+    const roiSearchInput = document.getElementById('roiSearchInput');
+    if (roiSearchInput) {
+        roiSearchInput.addEventListener('input', function(e) {
+            const searchTerm = e.target.value.toLowerCase();
+            const roiCheckboxes = document.querySelectorAll('.roi-checkbox');
+            
+            roiCheckboxes.forEach(checkbox => {
+                const roiDiv = checkbox.closest('.form-check');
+                const label = roiDiv.querySelector('label');
+                const roiName = label.textContent.toLowerCase();
+                
+                if (roiName.includes(searchTerm)) {
+                    roiDiv.style.display = 'block';
+                } else {
+                    roiDiv.style.display = 'none';
+                }
+            });
+        });
+    }
 });
 
 // Setup viewer controls after visualization is loaded

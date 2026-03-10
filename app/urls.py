@@ -35,4 +35,6 @@ urlpatterns = [
     path("metrics/overlap-results/<str:task_id>/", views.spatial_overlap_results, name="spatial_overlap_results"),
     path("metrics/results-list/", views.spatial_overlap_metrics_list, name="spatial_overlap_metrics_list"),
     path("api/series/<int:series_id>/rois-with-nifti/", views.get_series_rois_with_nifti, name="get_series_rois_with_nifti"),
+    path("visualize-webgl/<int:series_id>/", views.visualize_niivue, name="visualize_niivue"),
+    path("api/niivue-data/<int:series_id>/", views.get_niivue_data, name="get_niivue_data"),
 ]

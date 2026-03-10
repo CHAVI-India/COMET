@@ -1480,3 +1480,68 @@ def get_series_rois_with_nifti(request, series_id):
             'error': str(e),
             'rois': []
         }, status=500)
+
+
+def visualize_niivue(request, series_id):
+    """
+    WebGL-based visualization using niivue library.
+    Provides instant, GPU-accelerated rendering without pre-generating PNG slices.
+    """
+    from app.models import DICOMSeries
+    from app.utils.niivue_visualizer import get_available_rois
+    
+    series = get_object_or_404(
+        DICOMSeries.objects.select_related('study', 'study__patient'),
+        id=series_id
+    )
+    
+    # Check if NIfTI file exists
+    if not series.nifti_file_path:
+        messages.error(request, "NIfTI file not found for this series. Please convert to NIfTI first.")
+        return redirect("nifti_list")
+    
+    # Get available ROIs
+    try:
+        rois = get_available_rois(series_id)
+    except Exception as e:
+        logger.error(f"Error getting ROIs: {e}")
+        rois = []
+    
+    return render(request, "app/visualize_niivue.html", {
+        "series": series,
+        "rois": rois,
+        "patient": series.study.patient,
+        "study": series.study
+    })
+
+
+def get_niivue_data(request, series_id):
+    """
+    API endpoint to get NIfTI file paths and metadata for niivue visualization.
+    Returns JSON with base image and overlay paths.
+    """
+    from app.utils.niivue_visualizer import prepare_niivue_data
+    
+    try:
+        # Get parameters from request
+        roi_names = request.GET.getlist('roi_names[]')
+        include_staple = request.GET.get('include_staple', 'true').lower() == 'true'
+        
+        # Prepare data for niivue
+        data = prepare_niivue_data(
+            image_series_id=series_id,
+            roi_names=roi_names if roi_names else None,
+            include_staple=include_staple
+        )
+        
+        return JsonResponse({
+            'success': True,
+            'data': data
+        })
+        
+    except Exception as e:
+        logger.error(f"Error preparing niivue data: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

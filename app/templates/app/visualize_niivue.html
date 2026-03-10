@@ -1,0 +1,746 @@
+{% extends 'app/base.html' %}
+
+{% block title %}WebGL Viewer - {{ patient.patient_id }}{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'nifti_list' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to NIfTI List
+    </a>
+    <a href="{% url 'visualize_patient_series' series.id %}" class="btn btn-outline-primary btn-sm ms-2">
+        <i class="bi bi-image me-1"></i>Matplotlib Viewer (Legacy)
+    </a>
+</div>
+
+<div class="card shadow mb-4">
+    <div class="card-header bg-success text-white">
+        <h4 class="mb-0">
+            <i class="bi bi-gpu-card me-2"></i>WebGL Viewer (GPU-Accelerated)
+            <span class="badge bg-light text-success ms-2">Fast</span>
+        </h4>
+    </div>
+    <div class="card-body">
+        <div class="row mb-4">
+            <div class="col-md-6">
+                <h5><i class="bi bi-person me-2 text-primary"></i>Patient Information</h5>
+                <table class="table table-sm">
+                    <tr>
+                        <th width="150">Patient ID:</th>
+                        <td><strong>{{ patient.patient_id }}</strong></td>
+                    </tr>
+                    {% if patient.patient_name %}
+                    <tr>
+                        <th>Patient Name:</th>
+                        <td>{{ patient.patient_name }}</td>
+                    </tr>
+                    {% endif %}
+                </table>
+            </div>
+            <div class="col-md-6">
+                <h5><i class="bi bi-file-medical me-2 text-info"></i>Series Information</h5>
+                <table class="table table-sm">
+                    <tr>
+                        <th width="150">Modality:</th>
+                        <td><span class="badge bg-info">{{ series.modality }}</span></td>
+                    </tr>
+                    <tr>
+                        <th>Series UID:</th>
+                        <td><code>{{ series.series_instance_uid|truncatechars:40 }}</code></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <hr>
+
+        <h5 class="mb-3"><i class="bi bi-sliders me-2"></i>Visualization Settings</h5>
+        
+        <div class="row mb-3">
+            <div class="col-md-12">
+                <div class="alert alert-info">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>WebGL Viewer Benefits:</strong>
+                    <ul class="mb-0 mt-2">
+                        <li>⚡ <strong>Instant loading</strong> - No waiting for PNG generation</li>
+                        <li>🖱️ <strong>Interactive navigation</strong> - Scroll through slices in real-time</li>
+                        <li>🎨 <strong>Dynamic windowing</strong> - Adjust contrast on-the-fly</li>
+                        <li>💻 <strong>GPU-accelerated</strong> - Smooth rendering using your graphics card</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Left Sidebar with ROIs and Controls -->
+            <div class="col-md-3">
+                <form id="roiSelectionForm">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h6 class="mb-0"><i class="bi bi-list-check me-2"></i>ROIs & Controls</h6>
+                        </div>
+                        <div class="card-body">
+                            <label class="form-label fw-bold">Select ROIs:</label>
+                            <div style="max-height: 250px; overflow-y: auto; margin-bottom: 1rem;">
+                                {% if rois %}
+                                    {% for roi in rois %}
+                                    <div class="form-check mb-2">
+                                        <input class="form-check-input roi-checkbox" type="checkbox" 
+                                               value="{{ roi.name }}" id="roi_{{ forloop.counter }}"
+                                               checked>
+                                        <label class="form-check-label small" for="roi_{{ forloop.counter }}">
+                                            {{ roi.name }}
+                                            <span class="text-muted">
+                                                ({{ roi.structure_sets|length }}{% if roi.has_staple %}+S{% endif %})
+                                            </span>
+                                        </label>
+                                    </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="alert alert-warning">
+                                        <i class="bi bi-exclamation-triangle me-2"></i>
+                                        No ROIs found.
+                                    </div>
+                                {% endif %}
+                            </div>
+                    <label class="form-label"><strong>Options:</strong></label>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="include_staple" checked>
+                        <label class="form-check-label" for="include_staple">
+                            Include STAPLE Contours
+                        </label>
+                    </div>
+                    <button type="button" class="btn btn-primary btn-sm w-100 mt-2" id="loadVisualization" disabled>
+                        <i class="bi bi-play-fill me-1"></i>Load Visualization
+                    </button>
+                    <small class="text-muted d-block mt-1" id="loadingLibraryMsg">
+                        <span class="spinner-border spinner-border-sm me-1"></span>Loading WebGL library...
+                    </small>
+                    <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" id="selectAll">
+                        <i class="bi bi-check-all me-1"></i>Select All
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm w-100 mt-2" id="deselectAll">
+                        <i class="bi bi-x-circle me-1"></i>Deselect All
+                    </button>
+                    <hr class="my-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm w-100" id="toggleDragMode">
+                        <i class="bi bi-arrows-move me-1"></i>Mode: <span id="dragModeLabel">Pan/Zoom</span>
+                    </button>
+                    <small class="text-muted d-block mt-1">
+                        Click to switch between Pan/Zoom and Slice Navigation modes
+                    </small>
+                    <hr class="my-2">
+                    <label class="form-label fw-bold">Window/Level</label>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Presets:</label>
+                        <div class="btn-group-vertical w-100 mb-2" role="group">
+                            <button type="button" class="btn btn-sm btn-outline-secondary window-preset" data-center="40" data-width="400">
+                                Soft Tissue (40/400)
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary window-preset" data-center="40" data-width="80">
+                                Brain (40/80)
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary window-preset" data-center="400" data-width="1800">
+                                Bone (400/1800)
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary window-preset" data-center="-600" data-width="1500">
+                                Lung (-600/1500)
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary window-preset" data-center="60" data-width="160">
+                                Liver (60/160)
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mb-2">
+                        <label for="windowCenter" class="form-label small">Center: <span id="centerValue">40</span></label>
+                        <input type="range" class="form-range" id="windowCenter" min="-1000" max="1000" value="40">
+                    </div>
+                    <div class="mb-2">
+                        <label for="windowWidth" class="form-label small">Width: <span id="widthValue">400</span></label>
+                        <input type="range" class="form-range" id="windowWidth" min="1" max="2000" value="400">
+                    </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Right Side - Canvas -->
+            <div class="col-md-9">
+            <div id="loadingMessage" class="alert alert-info text-center" style="display: none;">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <strong>Loading NIfTI volumes...</strong>
+        </div>
+
+        <div id="errorMessage" class="alert alert-danger" style="display: none;">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>Error:</strong> <span id="errorText"></span>
+        </div>
+
+        <div id="viewerInfo" class="alert alert-success" style="display: none;">
+            <i class="bi bi-check-circle me-2"></i>
+            <strong>Loaded:</strong> <span id="infoText"></span>
+        </div>
+
+        <!-- NiiVue Canvas Container -->
+        <div id="canvasContainer" style="display: none;">
+            <div class="card">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-eye me-2"></i>Interactive Viewer
+                        <span class="float-end">
+                            <small>
+                                Use Mode button to switch: Pan/Zoom or Slice Navigation
+                            </small>
+                        </span>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <canvas id="gl1" width="1200" height="600"></canvas>
+                </div>
+                <div class="card-footer">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Crosshair Color:</strong></label>
+                            <select id="crosshairColor" class="form-select form-select-sm">
+                                <option value="red">Red</option>
+                                <option value="green">Green</option>
+                                <option value="blue">Blue</option>
+                                <option value="white" selected>White</option>
+                                <option value="yellow">Yellow</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Slice Type:</strong></label>
+                            <select id="sliceType" class="form-select form-select-sm">
+                                <option value="0">Axial</option>
+                                <option value="1">Coronal</option>
+                                <option value="2">Sagittal</option>
+                                <option value="3" selected>Multi-planar (3D)</option>
+                                <option value="4">Mosaic</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Colormap:</strong></label>
+                            <select id="colormap" class="form-select form-select-sm">
+                                <option value="gray" selected>Grayscale</option>
+                                <option value="viridis">Viridis</option>
+                                <option value="plasma">Plasma</option>
+                                <option value="hot">Hot</option>
+                                <option value="cool">Cool</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="resetView">
+                                <i class="bi bi-arrow-counterclockwise me-1"></i>Reset View
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="toggleOverlays">
+                                <i class="bi bi-layers me-1"></i>Toggle Overlays
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="screenshot">
+                                <i class="bi bi-camera me-1"></i>Screenshot
+                            </button>
+                        </div>
+                    </div>
+                    <div class="row mt-3" id="overlayControls" style="display: none;">
+                        <div class="col-md-12">
+                            <h6 class="mb-2"><i class="bi bi-layers me-2"></i>Overlay Controls</h6>
+                            <div id="overlayControlsList" class="row">
+                                <!-- Overlay controls will be added here dynamically -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+<script type="module">
+import { Niivue } from "https://unpkg.com/@niivue/niivue@0.57.0/dist/index.js";
+
+let nv = null;
+const seriesId = {{ series.id }};
+
+// Function to enable UI after module loads
+function enableViewer() {
+    console.log('NiiVue library loaded successfully');
+    console.log('Document ready state:', document.readyState);
+    
+    // Enable the load button
+    const loadBtn = document.getElementById('loadVisualization');
+    console.log('Load button found:', loadBtn !== null);
+    if (loadBtn) {
+        loadBtn.disabled = false;
+        console.log('Load button enabled');
+    } else {
+        console.error('Load button not found!');
+    }
+    
+    // Remove loading message completely
+    const loadingMsg = document.getElementById('loadingLibraryMsg');
+    console.log('Loading message found:', loadingMsg !== null);
+    if (loadingMsg) {
+        loadingMsg.remove();
+        console.log('Loading message removed');
+    } else {
+        console.error('Loading message not found!');
+    }
+}
+
+// Always wait for DOM to be fully ready
+window.addEventListener('load', function() {
+    console.log('Window load event fired');
+    enableViewer();
+});
+
+// Initialize event handlers
+document.addEventListener('DOMContentLoaded', function() {
+    // Select/Deselect All buttons
+    document.getElementById('selectAll').addEventListener('click', function() {
+        document.querySelectorAll('.roi-checkbox').forEach(cb => cb.checked = true);
+    });
+    
+    document.getElementById('deselectAll').addEventListener('click', function() {
+        document.querySelectorAll('.roi-checkbox').forEach(cb => cb.checked = false);
+    });
+    
+    // Load visualization button
+    document.getElementById('loadVisualization').addEventListener('click', loadNiiVueVisualization);
+});
+
+// Setup viewer controls after visualization is loaded
+function setupViewerControls() {
+    console.log('Setting up viewer controls...');
+    
+    // Drag mode toggle button
+    const toggleDragModeBtn = document.getElementById('toggleDragMode');
+    if (!toggleDragModeBtn) {
+        console.error('toggleDragMode button not found');
+        return;
+    }
+    toggleDragModeBtn.addEventListener('click', function() {
+        if (nv) {
+            const label = document.getElementById('dragModeLabel');
+            if (nv.opts.dragMode === nv.dragModes.pan) {
+                // Switch to default mode (crosshair/slice navigation)
+                nv.opts.dragMode = nv.dragModes.contrast;
+                label.textContent = 'Slice Nav';
+            } else {
+                // Switch to pan mode (zoom)
+                nv.opts.dragMode = nv.dragModes.pan;
+                label.textContent = 'Pan/Zoom';
+            }
+        }
+    });
+    
+    // Window preset buttons
+    const presetButtons = document.querySelectorAll('.window-preset');
+    console.log('Found', presetButtons.length, 'preset buttons');
+    presetButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            if (nv && nv.volumes.length > 0) {
+                const center = parseFloat(this.dataset.center);
+                const width = parseFloat(this.dataset.width);
+                
+                // Update sliders
+                document.getElementById('windowCenter').value = center;
+                document.getElementById('windowWidth').value = width;
+                document.getElementById('centerValue').textContent = Math.round(center);
+                document.getElementById('widthValue').textContent = Math.round(width);
+                
+                // Apply to volume
+                nv.volumes[0].cal_min = center - width / 2;
+                nv.volumes[0].cal_max = center + width / 2;
+                nv.updateGLVolume();
+            }
+        });
+    });
+    
+    // Window/Level controls
+    const windowCenterEl = document.getElementById('windowCenter');
+    const windowWidthEl = document.getElementById('windowWidth');
+    
+    if (!windowCenterEl || !windowWidthEl) {
+        console.error('Window controls not found');
+        return;
+    }
+    
+    windowCenterEl.addEventListener('input', function(e) {
+        if (nv && nv.volumes.length > 0) {
+            const center = parseFloat(e.target.value);
+            const width = parseFloat(document.getElementById('windowWidth').value);
+            nv.volumes[0].cal_min = center - width / 2;
+            nv.volumes[0].cal_max = center + width / 2;
+            nv.updateGLVolume();
+            document.getElementById('centerValue').textContent = Math.round(center);
+        }
+    });
+    
+    windowWidthEl.addEventListener('input', function(e) {
+        if (nv && nv.volumes.length > 0) {
+            const width = parseFloat(e.target.value);
+            const center = parseFloat(windowCenterEl.value);
+            nv.volumes[0].cal_min = center - width / 2;
+            nv.volumes[0].cal_max = center + width / 2;
+            nv.updateGLVolume();
+            document.getElementById('widthValue').textContent = Math.round(width);
+        }
+    });
+    
+    const resetWindowBtn = document.getElementById('resetWindow');
+    if (resetWindowBtn) {
+        resetWindowBtn.addEventListener('click', function() {
+        if (nv && nv.volumes.length > 0) {
+            // Reset to default CT window
+            const center = 40;
+            const width = 400;
+            document.getElementById('windowCenter').value = center;
+            document.getElementById('windowWidth').value = width;
+            document.getElementById('centerValue').textContent = center;
+            document.getElementById('widthValue').textContent = width;
+            nv.volumes[0].cal_min = center - width / 2;
+            nv.volumes[0].cal_max = center + width / 2;
+            nv.updateGLVolume();
+        }
+        });
+    }
+    
+    // Viewer controls
+    const crosshairColorEl = document.getElementById('crosshairColor');
+    if (crosshairColorEl) {
+        crosshairColorEl.addEventListener('change', function(e) {
+            if (nv) {
+                const colorMap = {
+                    'red': [1, 0, 0, 1],
+                    'green': [0, 1, 0, 1],
+                    'blue': [0, 0, 1, 1],
+                    'white': [1, 1, 1, 1],
+                    'yellow': [1, 1, 0, 1]
+                };
+                nv.opts.crosshairColor = colorMap[e.target.value] || [1, 1, 1, 1];
+                nv.updateGLVolume();
+                console.log('Crosshair color changed to:', e.target.value);
+            }
+        });
+    }
+    
+    const sliceTypeEl = document.getElementById('sliceType');
+    if (sliceTypeEl) {
+        sliceTypeEl.addEventListener('change', function(e) {
+            if (nv) {
+                const sliceType = parseInt(e.target.value);
+                console.log('Changing slice type to:', sliceType);
+                nv.setSliceType(sliceType);
+            }
+        });
+    }
+    
+    const colormapEl = document.getElementById('colormap');
+    if (colormapEl) {
+        colormapEl.addEventListener('change', function(e) {
+            if (nv && nv.volumes.length > 0) {
+                console.log('Changing colormap to:', e.target.value);
+                nv.setColormap(nv.volumes[0].id, e.target.value);
+            }
+        });
+    }
+    
+    const resetViewEl = document.getElementById('resetView');
+    if (resetViewEl) {
+        resetViewEl.addEventListener('click', function() {
+            if (nv) nv.setSliceType(nv.sliceTypeMultiplanar);
+        });
+    }
+    
+    const toggleOverlaysEl = document.getElementById('toggleOverlays');
+    if (toggleOverlaysEl) {
+        toggleOverlaysEl.addEventListener('click', function() {
+            if (nv && nv.volumes.length > 1) {
+                for (let i = 1; i < nv.volumes.length; i++) {
+                    nv.volumes[i].opacity = nv.volumes[i].opacity > 0 ? 0 : 0.5;
+                }
+                nv.updateGLVolume();
+            }
+        });
+    }
+    
+    const screenshotEl = document.getElementById('screenshot');
+    if (screenshotEl) {
+        screenshotEl.addEventListener('click', function() {
+            if (nv) {
+                const canvas = document.getElementById('gl1');
+                canvas.toBlob(function(blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'niivue_screenshot.png';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                });
+            }
+        });
+    }
+}
+
+async function loadNiiVueVisualization() {
+    // Get selected ROIs
+    const selectedRois = Array.from(document.querySelectorAll('.roi-checkbox:checked'))
+        .map(cb => cb.value);
+    
+    if (selectedRois.length === 0) {
+        showError('Please select at least one ROI to visualize.');
+        return;
+    }
+    
+    const includeStaple = document.getElementById('include_staple').checked;
+    
+    // Show loading message
+    showLoading();
+    
+    try {
+        // Fetch NIfTI data from API
+        const params = new URLSearchParams();
+        selectedRois.forEach(roi => params.append('roi_names[]', roi));
+        params.append('include_staple', includeStaple);
+        
+        const response = await fetch(`/api/niivue-data/${seriesId}/?${params.toString()}`);
+        const result = await response.json();
+        
+        if (!result.success) {
+            throw new Error(result.error || 'Failed to load visualization data');
+        }
+        
+        const data = result.data;
+        
+        // Show canvas container first
+        document.getElementById('canvasContainer').style.display = 'block';
+        
+        // Prepare image list with proper structure
+        const imageList = [];
+        
+        // Warn if too many overlays selected
+        if (data.overlays.length > 20) {
+            showInfo(`Loading ${data.overlays.length} overlays - this may take a moment...`);
+        }
+        
+        // Add base image with name property for extension detection
+        const baseImageUrl = `/media/${data.base_image.url}`;
+        console.log('Base image URL:', baseImageUrl);
+        imageList.push({
+            url: baseImageUrl,
+            name: 'image.nii.gz',  // name with extension for file type detection
+            colormap: 'gray',
+            opacity: 1.0
+        });
+        
+        // Define color palette for overlays
+        const colorPalette = ['red', 'green', 'blue', 'yellow', 'cyan', 'magenta', 'orange', 'purple', 'pink', 'lime'];
+        
+        // Add overlays with name property and different colors
+        let nonStapleIndex = 0;
+        data.overlays.forEach((overlay) => {
+            const overlayUrl = `/media/${overlay.url}`;
+            console.log('Overlay URL:', overlayUrl);
+            
+            // Check if this is a STAPLE overlay (name starts with ⭐ STAPLE)
+            const isStaple = overlay.name && overlay.name.includes('STAPLE');
+            // Use 'warm' colormap for STAPLE which gives gold/orange tones
+            const colormap = isStaple ? 'warm' : colorPalette[nonStapleIndex % colorPalette.length];
+            
+            if (!isStaple) {
+                nonStapleIndex++;
+            }
+            
+            imageList.push({
+                url: overlayUrl,
+                name: 'overlay.nii.gz',  // name with extension for file type detection
+                colormap: colormap,
+                opacity: overlay.opacity,
+                cal_min: 0,
+                cal_max: 1
+            });
+        });
+        
+        console.log('Loading volumes:', imageList);
+        
+        // Initialize NiiVue if not already done
+        if (!nv) {
+            nv = new Niivue({
+                backColor: [0, 0, 0, 1],
+                show3Dcrosshair: true,
+                onLocationChange: handleLocationChange
+            });
+            await nv.attachTo('gl1');
+            
+            // Set drag mode to pan for zoom/pan functionality
+            nv.opts.dragMode = nv.dragModes.pan;
+            
+            console.log('NiiVue attached to canvas');
+            console.log('Drag mode set to pan for zoom/pan support');
+        }
+        
+        // Use loadVolumes() as shown in working demos
+        await nv.loadVolumes(imageList);
+        console.log('All volumes loaded successfully');
+        
+        // Apply CT windowing if available
+        if (data.metadata.window_center && data.metadata.window_width) {
+            const center = data.metadata.window_center;
+            const width = data.metadata.window_width;
+            nv.volumes[0].cal_min = center - width / 2;
+            nv.volumes[0].cal_max = center + width / 2;
+        }
+        
+        // Set slice type based on dropdown selection
+        const sliceTypeSelect = document.getElementById('sliceType');
+        const selectedSliceType = parseInt(sliceTypeSelect.value);
+        nv.setSliceType(selectedSliceType);
+        
+        // Force scene update
+        nv.updateGLVolume();
+        
+        // Setup viewer controls now that canvas is visible
+        setupViewerControls();
+        
+        // Create overlay controls
+        createOverlayControls(data.overlays);
+        
+        // Hide loading
+        hideLoading();
+        
+        // Show success message
+        showInfo(`Loaded ${data.metadata.modality} image with ${data.metadata.total_overlays} overlay(s)`);
+        
+    } catch (error) {
+        console.error('Error loading visualization:', error);
+        hideLoading();
+        showError(error.message);
+    }
+}
+
+function handleLocationChange(data) {
+    // Optional: Handle location changes (e.g., update slice info)
+    console.log('Location changed:', data);
+}
+
+function showLoading() {
+    document.getElementById('loadingMessage').style.display = 'block';
+    document.getElementById('errorMessage').style.display = 'none';
+    document.getElementById('viewerInfo').style.display = 'none';
+}
+
+function hideLoading() {
+    document.getElementById('loadingMessage').style.display = 'none';
+}
+
+function showError(message) {
+    document.getElementById('errorText').textContent = message;
+    document.getElementById('errorMessage').style.display = 'block';
+    document.getElementById('viewerInfo').style.display = 'none';
+}
+
+function showInfo(message) {
+    document.getElementById('infoText').textContent = message;
+    document.getElementById('viewerInfo').style.display = 'block';
+    document.getElementById('errorMessage').style.display = 'none';
+}
+
+// Create overlay controls for each loaded overlay
+function createOverlayControls(overlays) {
+    const controlsList = document.getElementById('overlayControlsList');
+    const controlsSection = document.getElementById('overlayControls');
+    
+    if (!controlsList || overlays.length === 0) return;
+    
+    controlsList.innerHTML = '';
+    
+    overlays.forEach((overlay, index) => {
+        // Volume index is index + 1 (0 is base image)
+        const volumeIndex = index + 1;
+        
+        const controlDiv = document.createElement('div');
+        controlDiv.className = 'col-md-3 col-sm-6 mb-3';
+        controlDiv.innerHTML = `
+            <div class="card h-100">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <small class="fw-bold text-truncate" style="max-width: 120px;" title="${overlay.name}">
+                            ${overlay.name}
+                        </small>
+                        <div class="form-check form-switch mb-0">
+                            <input class="form-check-input overlay-toggle" type="checkbox" 
+                                   id="toggle_${volumeIndex}" data-volume-index="${volumeIndex}" checked>
+                        </div>
+                    </div>
+                    <div>
+                        <label for="opacity_${volumeIndex}" class="form-label small mb-1">
+                            Opacity: <span id="opacityValue_${volumeIndex}">${Math.round(overlay.opacity * 100)}%</span>
+                        </label>
+                        <input type="range" class="form-range overlay-opacity" 
+                               id="opacity_${volumeIndex}" data-volume-index="${volumeIndex}"
+                               min="0" max="100" value="${Math.round(overlay.opacity * 100)}">
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        controlsList.appendChild(controlDiv);
+    });
+    
+    // Show the controls section
+    controlsSection.style.display = 'block';
+    
+    // Add event listeners for opacity sliders
+    document.querySelectorAll('.overlay-opacity').forEach(slider => {
+        slider.addEventListener('input', function(e) {
+            const volumeIndex = parseInt(this.dataset.volumeIndex);
+            const opacity = parseFloat(e.target.value) / 100;
+            
+            if (nv && nv.volumes[volumeIndex]) {
+                nv.volumes[volumeIndex].opacity = opacity;
+                nv.updateGLVolume();
+                document.getElementById(`opacityValue_${volumeIndex}`).textContent = 
+                    Math.round(opacity * 100) + '%';
+            }
+        });
+    });
+    
+    // Add event listeners for toggle switches
+    document.querySelectorAll('.overlay-toggle').forEach(toggle => {
+        toggle.addEventListener('change', function(e) {
+            const volumeIndex = parseInt(this.dataset.volumeIndex);
+            
+            if (nv && nv.volumes[volumeIndex]) {
+                nv.volumes[volumeIndex].opacity = e.target.checked ? 
+                    (parseFloat(document.getElementById(`opacity_${volumeIndex}`).value) / 100) : 0;
+                nv.updateGLVolume();
+            }
+        });
+    });
+}
+
+// Make functions available globally for event handlers
+window.loadNiiVueVisualization = loadNiiVueVisualization;
+</script>
+
+<style>
+#gl1 {
+    background-color: #000;
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.form-check-input:checked {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.card-footer {
+    background-color: #f8f9fa;
+}
+</style>
+{% endblock %}

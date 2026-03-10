@@ -61,13 +61,21 @@
                         <small class="text-muted">
                             <strong>{{ img_data.series.modality }}</strong> | 
                             <code>{{ img_data.series.series_instance_uid|truncatechars:50 }}</code>
-                            <button type="button" 
-                                    class="btn btn-sm btn-outline-primary float-end visualize-btn" 
-                                    data-series-id="{{ img_data.series.id }}"
-                                    data-patient-id="{{ patient_data.patient.patient_id }}"
-                                    data-modality="{{ img_data.series.modality }}">
-                                <i class="bi bi-eye me-1"></i>Visualize
-                            </button>
+                            <div class="float-end">
+                                <a href="{% url 'visualize_niivue' img_data.series.id %}" 
+                                   class="btn btn-sm btn-success me-1"
+                                   title="WebGL Viewer (Fast, GPU-accelerated)">
+                                    <i class="bi bi-gpu-card me-1"></i>WebGL
+                                </a>
+                                <button type="button" 
+                                        class="btn btn-sm btn-outline-primary visualize-btn" 
+                                        data-series-id="{{ img_data.series.id }}"
+                                        data-patient-id="{{ patient_data.patient.patient_id }}"
+                                        data-modality="{{ img_data.series.modality }}"
+                                        title="Matplotlib Viewer (Legacy)">
+                                    <i class="bi bi-eye me-1"></i>Matplotlib
+                                </button>
+                            </div>
                         </small>
                     </div>
                     {% endfor %}

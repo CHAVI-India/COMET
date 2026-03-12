@@ -189,6 +189,47 @@
             </div>
         </div>
 
+        <!-- Suggested Pairs Section -->
+        {% if total_suggested_pairs > 0 %}
+        <div class="card mb-4 border-success">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="bi bi-lightbulb me-2"></i>Suggested Comparisons
+                    <span class="badge bg-light text-success ms-2">{{ total_suggested_pairs }}</span>
+                </h5>
+                <small>Automatically detected ROI pairs that should be compared</small>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Auto-detected pairs:</strong>
+                    <ul class="mb-0 mt-2 small">
+                        <li><strong>Multiple Structure Sets:</strong> Same ROI in different structure sets for the same image series</li>
+                        <li><strong>STAPLE Comparisons:</strong> STAPLE consensus contours vs individual instances</li>
+                    </ul>
+                </div>
+                
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <button id="addAllSuggestedBtn" class="btn btn-success">
+                            <i class="bi bi-plus-circle-fill me-1"></i>Add All Suggested Pairs
+                        </button>
+                        <button id="clearSuggestedBtn" class="btn btn-outline-secondary ms-2">
+                            <i class="bi bi-x-circle me-1"></i>Clear Suggestions
+                        </button>
+                    </div>
+                    <div>
+                        <span class="text-muted small">Click individual pairs to add them</span>
+                    </div>
+                </div>
+                
+                <div id="suggestedPairsList" style="max-height: 400px; overflow-y: auto;">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
             <!-- Comparison List -->
             <div class="card mb-4">
                 <div class="card-header bg-light">
@@ -244,6 +285,7 @@
 <script>
 // Store ROI data
 const roiData = {{ roi_data_json|safe }};
+const suggestedPairs = {{ suggested_pairs_json|safe }};
 let roiPairs = [];
 let selectedFirstROI = null;
 let selectedSecondROI = null;
@@ -253,6 +295,7 @@ let selectedSecondType = null;
 // Initialize
 document.addEventListener('DOMContentLoaded', function() {
     setupEventListeners();
+    displaySuggestedPairs();
 });
 
 function setupEventListeners() {
@@ -261,6 +304,135 @@ function setupEventListeners() {
     document.getElementById('clearSelection').addEventListener('click', clearROISelection);
     document.getElementById('addPairsBtn').addEventListener('click', generatePairs);
     document.getElementById('computeMetricsBtn').addEventListener('click', computeMetrics);
+    
+    // Suggested pairs buttons
+    const addAllBtn = document.getElementById('addAllSuggestedBtn');
+    const clearSuggestedBtn = document.getElementById('clearSuggestedBtn');
+    if (addAllBtn) {
+        addAllBtn.addEventListener('click', addAllSuggestedPairs);
+    }
+    if (clearSuggestedBtn) {
+        clearSuggestedBtn.addEventListener('click', clearSuggestedPairs);
+    }
+}
+
+function displaySuggestedPairs() {
+    const suggestedPairsList = document.getElementById('suggestedPairsList');
+    if (!suggestedPairsList || !suggestedPairs || suggestedPairs.length === 0) return;
+    
+    // Group by suggestion type
+    const multipleStructureSets = suggestedPairs.filter(p => p.suggestion_type === 'multiple_structuresets');
+    const stapleComparisons = suggestedPairs.filter(p => p.suggestion_type === 'staple_vs_regular');
+    
+    let html = '';
+    
+    if (multipleStructureSets.length > 0) {
+        html += `
+            <div class="mb-3">
+                <h6 class="text-success">
+                    <i class="bi bi-diagram-3 me-2"></i>Multiple Structure Sets (${multipleStructureSets.length})
+                </h6>
+                <small class="text-muted">Same ROI in different structure sets for the same image series</small>
+            </div>
+        `;
+        multipleStructureSets.forEach((pair, index) => {
+            html += renderSuggestedPair(pair, index);
+        });
+    }
+    
+    if (stapleComparisons.length > 0) {
+        html += `
+            <div class="mb-3 mt-4">
+                <h6 class="text-warning">
+                    <i class="bi bi-star-fill me-2"></i>STAPLE Comparisons (${stapleComparisons.length})
+                </h6>
+                <small class="text-muted">STAPLE consensus contours vs individual instances</small>
+            </div>
+        `;
+        stapleComparisons.forEach((pair, index) => {
+            html += renderSuggestedPair(pair, multipleStructureSets.length + index);
+        });
+    }
+    
+    suggestedPairsList.innerHTML = html;
+}
+
+function renderSuggestedPair(pair, index) {
+    const refBadgeClass = pair.reference_roi_type === 'STAPLE' ? 'bg-warning text-dark' : 'bg-info';
+    const refIcon = pair.reference_roi_type === 'STAPLE' ? 'star-fill' : 'diagram-3';
+    const targetBadgeClass = pair.target_roi_type === 'STAPLE' ? 'bg-warning text-dark' : 'bg-info';
+    const targetIcon = pair.target_roi_type === 'STAPLE' ? 'star-fill' : 'diagram-3';
+    
+    return `
+        <div class="pair-item mb-2" style="cursor: pointer; border-left: 4px solid #198754;" onclick="addSuggestedPair(${index})">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="flex-grow-1">
+                    <div class="mb-1">
+                        <span class="badge bg-secondary me-2">${pair.patient_id}</span>
+                        <span class="badge bg-dark">${pair.series_modality}</span>
+                    </div>
+                    <div class="d-flex align-items-center">
+                        <span class="badge ${refBadgeClass} me-2">
+                            <i class="bi bi-${refIcon} me-1"></i>${pair.reference_roi_type}
+                        </span>
+                        <strong class="text-primary me-2">${pair.reference_roi_name}</strong>
+                        <i class="bi bi-arrow-right text-muted mx-2"></i>
+                        <span class="badge ${targetBadgeClass} me-2">
+                            <i class="bi bi-${targetIcon} me-1"></i>${pair.target_roi_type}
+                        </span>
+                        <strong class="text-success">${pair.target_roi_name}</strong>
+                    </div>
+                    <div class="mt-1">
+                        <small class="text-muted">${pair.reference_source} vs ${pair.target_source}</small>
+                    </div>
+                </div>
+                <button class="btn btn-sm btn-success" onclick="event.stopPropagation(); addSuggestedPair(${index})">
+                    <i class="bi bi-plus-circle"></i>
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+function addSuggestedPair(index) {
+    const pair = suggestedPairs[index];
+    if (!pair) return;
+    
+    // Check if pair already exists
+    const exists = roiPairs.some(p => 
+        p.reference_roi_id == pair.reference_roi_id && 
+        p.target_roi_id == pair.target_roi_id
+    );
+    
+    if (!exists) {
+        roiPairs.push(pair);
+        displayPairsList();
+    }
+}
+
+function addAllSuggestedPairs() {
+    suggestedPairs.forEach(pair => {
+        const exists = roiPairs.some(p => 
+            p.reference_roi_id == pair.reference_roi_id && 
+            p.target_roi_id == pair.target_roi_id
+        );
+        
+        if (!exists) {
+            roiPairs.push(pair);
+        }
+    });
+    displayPairsList();
+}
+
+function clearSuggestedPairs() {
+    // Remove all suggested pairs from roiPairs
+    roiPairs = roiPairs.filter(pair => {
+        return !suggestedPairs.some(sp => 
+            sp.reference_roi_id == pair.reference_roi_id && 
+            sp.target_roi_id == pair.target_roi_id
+        );
+    });
+    displayPairsList();
 }
 
 function handleFirstROIChange(e) {

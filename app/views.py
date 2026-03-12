@@ -1365,10 +1365,71 @@ def spatial_overlap_metrics(request):
     roi_list.sort(key=lambda x: x['roi_name'])
     roi_list_json.sort(key=lambda x: x['roi_name'])
     
+    # Generate automatic pair suggestions
+    suggested_pairs = []
+    
+    for roi_name, data in roi_data.items():
+        regular_instances = data['regular_instances']
+        staple_instances = data['staple_instances']
+        
+        # Group regular instances by series_id to find multiple structure sets for same series
+        series_groups = defaultdict(list)
+        for inst in regular_instances:
+            series_groups[inst['series_id']].append(inst)
+        
+        # Type 1: Multiple structure sets with same ROI for same image series
+        for series_id, instances in series_groups.items():
+            if len(instances) > 1:
+                # Generate pairwise combinations (1vs2, 1vs3, 2vs3, etc.)
+                for i in range(len(instances)):
+                    for j in range(i + 1, len(instances)):
+                        suggested_pairs.append({
+                            'reference_roi_id': instances[i]['roi_id'],
+                            'reference_roi_name': instances[i]['roi_name'],
+                            'reference_roi_type': instances[i]['roi_type'],
+                            'target_roi_id': instances[j]['roi_id'],
+                            'target_roi_name': instances[j]['roi_name'],
+                            'target_roi_type': instances[j]['roi_type'],
+                            'series_id': instances[i]['series_id'],
+                            'series_modality': instances[i]['series_modality'],
+                            'patient_id': instances[i]['patient_id'],
+                            'patient_name': instances[i]['patient_name'],
+                            'reference_source': instances[i]['source_label'],
+                            'target_source': instances[j]['source_label'],
+                            'suggestion_type': 'multiple_structuresets'
+                        })
+        
+        # Type 2: STAPLE vs all regular instances for same series
+        if staple_instances:
+            for staple_inst in staple_instances:
+                staple_series_id = staple_inst['series_id']
+                # Find all regular instances for the same series
+                matching_regular = [inst for inst in regular_instances if inst['series_id'] == staple_series_id]
+                for regular_inst in matching_regular:
+                    suggested_pairs.append({
+                        'reference_roi_id': staple_inst['roi_id'],
+                        'reference_roi_name': staple_inst['roi_name'],
+                        'reference_roi_type': staple_inst['roi_type'],
+                        'target_roi_id': regular_inst['roi_id'],
+                        'target_roi_name': regular_inst['roi_name'],
+                        'target_roi_type': regular_inst['roi_type'],
+                        'series_id': staple_inst['series_id'],
+                        'series_modality': staple_inst['series_modality'],
+                        'patient_id': staple_inst['patient_id'],
+                        'patient_name': staple_inst['patient_name'],
+                        'reference_source': staple_inst['source_label'],
+                        'target_source': regular_inst['source_label'],
+                        'suggestion_type': 'staple_vs_regular'
+                    })
+    
+    logger.info(f"Generated {len(suggested_pairs)} automatic pair suggestions")
+    
     return render(request, "app/spatial_overlap_metrics.html", {
         "roi_list": roi_list,
         "roi_data_json": json.dumps(roi_list_json),
-        "total_roi_names": len(roi_list)
+        "suggested_pairs_json": json.dumps(suggested_pairs),
+        "total_roi_names": len(roi_list),
+        "total_suggested_pairs": len(suggested_pairs)
     })
 
 

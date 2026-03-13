@@ -50,3 +50,6 @@ EXPOSE 8000
 
 # Use entrypoint
 ENTRYPOINT ["/entrypoint.sh"]
+
+# Default command: run gunicorn with extended timeout for DICOM processing
+CMD ["gunicorn", "spatialmetrics.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "300", "--graceful-timeout", "60", "--keep-alive", "5"]

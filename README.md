@@ -225,6 +225,22 @@ To remove all data (volumes):
 docker-compose down -v
 ```
 
+### Performance & Timeout Configuration
+
+The Docker deployment is configured with the following settings:
+
+| Service | Workers | Timeout | Description |
+|---------|---------|---------|-------------|
+| **Gunicorn (Web)** | 4 workers | 300s (5 min) | Handles HTTP requests including large DICOM uploads |
+| **Celery (Tasks)** | 4 concurrent | N/A | Background processing for STAPLE, metrics computation |
+
+**Why 5-minute timeout?**
+- DICOM file uploads and conversions can take 30-120 seconds
+- STAPLE computation triggers may need time to queue tasks
+- The timeout prevents `504 Gateway Timeout` errors during long operations
+
+**Note:** Heavy computations (STAPLE, spatial metrics) run in Celery workers, so the web server responds quickly. The extended timeout handles edge cases where synchronous processing occurs.
+
 ## Development Setup
 
 To build locally instead of using the AWS image:

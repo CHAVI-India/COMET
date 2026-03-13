@@ -47,7 +47,7 @@ services:
     command: >
       sh -c "python manage.py migrate --noinput &&
              python manage.py collectstatic --noinput &&
-             gunicorn spatialmetrics.wsgi:application --bind 0.0.0.0:8000 --workers 4"
+             gunicorn spatialmetrics.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 300 --graceful-timeout 60"
     env_file:
       - .env
     environment:

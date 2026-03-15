@@ -696,21 +696,32 @@ function calculatePairCount() {
     
     // Both are regular: generate all pairwise combinations
     let count = 0;
-    firstInstances.forEach(firstInst => {
-        const matchingSecond = secondInstances.filter(secondInst => 
-            secondInst.series_id === firstInst.series_id
-        );
-        matchingSecond.forEach(secondInst => {
-            if (firstInst.roi_id !== secondInst.roi_id) {
-                count++;
-            }
-        });
-    });
     
-    // For same ROI name, calculate pairwise combinations
     if (selectedFirstROI.roi_name === selectedSecondROI.roi_name) {
-        const n = firstInstances.length;
-        count = (n * (n - 1)) / 2; // n choose 2
+        // Same ROI name: calculate pairwise combinations per series
+        // Group instances by series
+        const instancesBySeries = {};
+        firstInstances.forEach(inst => {
+            if (!instancesBySeries[inst.series_id]) {
+                instancesBySeries[inst.series_id] = [];
+            }
+            instancesBySeries[inst.series_id].push(inst);
+        });
+        
+        // For each series, calculate n choose 2
+        Object.values(instancesBySeries).forEach(seriesInstances => {
+            const n = seriesInstances.length;
+            count += (n * (n - 1)) / 2;
+        });
+    } else {
+        // Different ROI names: all combinations where series match
+        firstInstances.forEach(firstInst => {
+            const matchingSecond = secondInstances.filter(secondInst => 
+                secondInst.series_id === firstInst.series_id && 
+                firstInst.roi_id !== secondInst.roi_id
+            );
+            count += matchingSecond.length;
+        });
     }
     
     return count;

@@ -168,10 +168,10 @@ def compute_custom_metrics(label_a, label_b):
     metrics['Jaccard'] = jaccard_similarity(volume_a, volume_b)
     
     # Hausdorff Distance 95th percentile
-    metrics['HD95'] = hausdorff_distance_95(volume_a, volume_b)
+    metrics['HD95'] = hausdorff_distance_95(volume_a, volume_b, spacing=spacing)
     
     # Mean Surface Distance
-    metrics['MSD'] = mean_surface_distance(volume_a, volume_b)
+    metrics['MSD'] = mean_surface_distance(volume_a, volume_b, spacing=spacing)
     
     # Surface DSC with tau=3mm
     metrics['SurfaceDSC_3mm'] = surface_dsc(volume_a, volume_b, tau=3.0, spacing=spacing)

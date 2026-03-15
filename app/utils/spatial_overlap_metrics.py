@@ -235,104 +235,96 @@ def mean_distance_to_conformity(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     return (under_mdc + over_mdc) / 2.0
 
 
-def hausdorff_distance_95(volume1, volume2):
+def hausdorff_distance_95(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Hausdorff Distance 95th percentile between two binary volumes.
-    Follows PlatiPy's approach: compute max distance per direction, then take 95th percentile.
+    Uses SimpleITK methods matching PlatiPy's implementation exactly.
 
     Args:
         volume1 (numpy.ndarray): First binary volume.
         volume2 (numpy.ndarray): Second binary volume.
+        spacing (tuple): Voxel spacing in (x, y, z) dimensions.
 
     Returns:
         float: Hausdorff Distance 95th percentile.
     """
-    from scipy.ndimage import binary_erosion
+    # Convert numpy arrays to SimpleITK images
+    label_a = sitk.GetImageFromArray((volume1 > 0).astype(np.uint8))
+    label_a.SetSpacing(spacing)
     
-    vol1_binary = volume1 > 0
-    vol2_binary = volume2 > 0
+    label_b = sitk.GetImageFromArray((volume2 > 0).astype(np.uint8))
+    label_b.SetSpacing(spacing)
     
-    if not np.any(vol1_binary) or not np.any(vol2_binary):
+    # Check for empty volumes
+    if sitk.GetArrayViewFromImage(label_a).sum() == 0 or sitk.GetArrayViewFromImage(label_b).sum() == 0:
         return np.inf
     
-    # Extract surface voxels by subtracting eroded volume from original
-    vol1_surface = vol1_binary & ~binary_erosion(vol1_binary)
-    vol2_surface = vol2_binary & ~binary_erosion(vol2_binary)
+    # Use PlatiPy's approach: compute max distance per direction
+    max_sd_list = []
     
-    # Handle edge case where erosion removes everything (very small structures)
-    if not np.any(vol1_surface):
-        vol1_surface = vol1_binary
-    if not np.any(vol2_surface):
-        vol2_surface = vol2_binary
-    
-    # Compute distance transforms
-    dist1 = distance_transform_edt(~vol1_binary)
-    dist2 = distance_transform_edt(~vol2_binary)
-    
-    # Get distances from surface voxels only
-    surface_distances_1_to_2 = dist2[vol1_surface]
-    surface_distances_2_to_1 = dist1[vol2_surface]
-    
-    # Compute max distance per direction (as per mathematical definition of HD)
-    max_dist_1_to_2 = np.max(surface_distances_1_to_2)
-    max_dist_2_to_1 = np.max(surface_distances_2_to_1)
+    for la, lb in ((label_a, label_b), (label_b, label_a)):
+        label_intensity_stat = sitk.LabelIntensityStatisticsImageFilter()
+        reference_distance_map = sitk.Abs(
+            sitk.SignedMaurerDistanceMap(
+                la, squaredDistance=False, useImageSpacing=True
+            )
+        )
+        moving_label_contour = sitk.LabelContour(lb)
+        label_intensity_stat.Execute(moving_label_contour, reference_distance_map)
+        
+        max_sd_list.append(label_intensity_stat.GetMaximum(1))
     
     # HD95 is the 95th percentile of the two max distances
-    hd_95 = np.percentile([max_dist_1_to_2, max_dist_2_to_1], 95)
+    hd_95 = np.percentile(max_sd_list, 95)
     
-    return hd_95
+    return float(hd_95)
 
 
-def mean_surface_distance(volume1, volume2):
+def mean_surface_distance(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Mean Surface Distance between two binary volumes.
-    Uses weighted average based on number of surface points (following PlatiPy's approach).
+    Uses SimpleITK methods matching PlatiPy's implementation exactly.
 
     Args:
         volume1 (numpy.ndarray): First binary volume.
         volume2 (numpy.ndarray): Second binary volume.
+        spacing (tuple): Voxel spacing in (x, y, z) dimensions.
 
     Returns:
         float: Mean Surface Distance.
     """
-    from scipy.ndimage import binary_erosion
+    # Convert numpy arrays to SimpleITK images
+    label_a = sitk.GetImageFromArray((volume1 > 0).astype(np.uint8))
+    label_a.SetSpacing(spacing)
     
-    vol1_binary = volume1 > 0
-    vol2_binary = volume2 > 0
+    label_b = sitk.GetImageFromArray((volume2 > 0).astype(np.uint8))
+    label_b.SetSpacing(spacing)
     
-    if not np.any(vol1_binary) or not np.any(vol2_binary):
+    # Check for empty volumes
+    if sitk.GetArrayViewFromImage(label_a).sum() == 0 or sitk.GetArrayViewFromImage(label_b).sum() == 0:
         return np.inf
     
-    # Extract surface voxels by subtracting eroded volume from original
-    vol1_surface = vol1_binary & ~binary_erosion(vol1_binary)
-    vol2_surface = vol2_binary & ~binary_erosion(vol2_binary)
+    # Use PlatiPy's approach: weighted average based on contour points
+    mean_sd_list = []
+    num_points = []
     
-    # Handle edge case where erosion removes everything (very small structures)
-    if not np.any(vol1_surface):
-        vol1_surface = vol1_binary
-    if not np.any(vol2_surface):
-        vol2_surface = vol2_binary
-    
-    # Compute distance transforms
-    dist1 = distance_transform_edt(~vol1_binary)
-    dist2 = distance_transform_edt(~vol2_binary)
-    
-    # Get distances from surface voxels only
-    surface_distances_1_to_2 = dist2[vol1_surface]
-    surface_distances_2_to_1 = dist1[vol2_surface]
-    
-    # Compute mean distances per direction
-    mean_dist_1_to_2 = np.mean(surface_distances_1_to_2)
-    mean_dist_2_to_1 = np.mean(surface_distances_2_to_1)
-    
-    # Number of surface points in each direction
-    num_points_1 = len(surface_distances_1_to_2)
-    num_points_2 = len(surface_distances_2_to_1)
+    for la, lb in ((label_a, label_b), (label_b, label_a)):
+        label_intensity_stat = sitk.LabelIntensityStatisticsImageFilter()
+        reference_distance_map = sitk.Abs(
+            sitk.SignedMaurerDistanceMap(
+                la, squaredDistance=False, useImageSpacing=True
+            )
+        )
+        moving_label_contour = sitk.LabelContour(lb)
+        label_intensity_stat.Execute(moving_label_contour, reference_distance_map)
+        
+        mean_sd_list.append(label_intensity_stat.GetMean(1))
+        num_points.append(label_intensity_stat.GetNumberOfPixels(1))
     
     # Weighted average based on number of surface points
-    mean_surf_dist = (mean_dist_1_to_2 * num_points_1 + mean_dist_2_to_1 * num_points_2) / (num_points_1 + num_points_2)
+    mean_surf_dist = np.dot(mean_sd_list, num_points) / np.sum(num_points)
     
-    return mean_surf_dist
+    return float(mean_surf_dist)
 
 
 def added_path_length(volume1, volume2, distance_threshold_mm=3, spacing=(1.0, 1.0, 1.0)):
@@ -701,9 +693,9 @@ def compute_spatial_overlap_metrics(
         
         results['DSC'] = dice_similarity(ref_volume, target_volume)
         results['Jaccard'] = jaccard_similarity(ref_volume, target_volume)
-        results['HD95'] = hausdorff_distance_95(ref_volume, target_volume)
+        results['HD95'] = hausdorff_distance_95(ref_volume, target_volume, spacing=spacing)
         results['APL'] = added_path_length(ref_volume, target_volume, spacing=spacing)
-        results['MSD'] = mean_surface_distance(ref_volume, target_volume)
+        results['MSD'] = mean_surface_distance(ref_volume, target_volume, spacing=spacing)
         results['OMDC'] = overcontouring_mean_distance_to_conformity(ref_volume, target_volume, spacing=spacing)
         results['UMDC'] = undercontouring_mean_distance_to_conformity(ref_volume, target_volume, spacing=spacing)
         results['MDC'] = mean_distance_to_conformity(ref_volume, target_volume, spacing=spacing)

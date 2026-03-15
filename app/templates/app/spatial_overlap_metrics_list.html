@@ -7,7 +7,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2><i class="bi bi-table me-2"></i>Spatial Overlap Metrics Results</h2>
         <div>
-            <a href="{% url 'spatial_overlap_metrics_csv' %}?patient_id={{ search_patient_id }}&patient_name={{ search_patient_name }}&roi_name={{ search_roi_name }}&structure_set_label={{ search_structure_set_label }}" class="btn btn-success me-2">
+            <a href="{% url 'spatial_overlap_metrics_csv' %}?patient_id={{ search_patient_id }}&patient_name={{ search_patient_name }}&roi_name={{ search_roi_name }}&structure_set_label={{ search_structure_set_label }}" class="btn btn-outline-primary me-2">
                 <i class="bi bi-download me-2"></i>Download CSV
             </a>
             <a href="{% url 'spatial_overlap_metrics' %}" class="btn btn-primary">

@@ -78,7 +78,7 @@
 
         <div class="text-center" id="processBtnContainer">
             {% csrf_token %}
-            <button id="processBtn" class="btn btn-lg btn-primary">
+            <button id="processBtn" class="btn btn-lg btn-success">
                 <i class="bi bi-gear me-2"></i>{% if archive.archive_extracted %}Reprocess{% else %}Process{% endif %} DICOM Archive
             </button>
         </div>
@@ -99,14 +99,14 @@
         
         {% if archive.archive_extracted %}
         <div class="text-center mt-3">
-            <a href="{% url 'patient_list' %}" class="btn btn-success">
+            <a href="{% url 'patient_list' %}" class="btn btn-primary">
                 <i class="bi bi-people me-1"></i>View Patients
             </a>
         </div>
         {% endif %}
     </div>
     <div class="card-footer text-end">
-        <a href="{% url 'dicom_archive_delete' archive.pk %}" class="btn btn-outline-danger btn-sm">
+        <a href="{% url 'dicom_archive_delete' archive.pk %}" class="btn btn-danger btn-sm">
             <i class="bi bi-trash me-1"></i>Delete Archive
         </a>
     </div>
@@ -212,7 +212,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </ul>
                         ${result.errors && result.errors.length > 0 ? `<p class="mt-2 text-warning"><i class="bi bi-exclamation-triangle me-1"></i>${result.errors.length} files had errors.</p>` : ''}
                         <div class="mt-3">
-                            <a href="{% url 'patient_list' %}" class="btn btn-success">
+                            <a href="{% url 'patient_list' %}" class="btn btn-primary">
                                 <i class="bi bi-people me-1"></i>View Patients
                             </a>
                         </div>
@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 resultMessage.innerHTML = `
                     <div class="alert alert-success">
                         <h5><i class="bi bi-check-circle me-2"></i>Processing Complete!</h5>
-                        <a href="{% url 'patient_list' %}" class="btn btn-success">
+                        <a href="{% url 'patient_list' %}" class="btn btn-primary">
                             <i class="bi bi-people me-1"></i>View Patients
                         </a>
                     </div>

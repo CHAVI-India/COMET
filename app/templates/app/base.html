@@ -49,36 +49,52 @@
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'dicom_archive_list' %}">Archives</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'patient_list' %}">Patients</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'rtstruct_list' %}">RT Structs</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'roi_list' %}">Image Series</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'nifti_list' %}">NIfTI Files</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{% url 'staple_computation' %}">
-                            <i class="bi bi-star-fill me-1"></i>STAPLE Computation
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="actionsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-gear-fill me-1"></i>Actions
                         </a>
+                        <ul class="dropdown-menu" aria-labelledby="actionsDropdown">
+                            <li><h6 class="dropdown-header">Data Processing</h6></li>
+                            <li><a class="dropdown-item" href="{% url 'dicom_archive_upload' %}">
+                                <i class="bi bi-upload me-2"></i>Upload DICOM Archive
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'rtstruct_list' %}">
+                                <i class="bi bi-gear me-2"></i>Extract ROI Information
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'roi_list' %}">
+                                <i class="bi bi-file-earmark-medical me-2"></i>Convert to NIfTI
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Computations</h6></li>
+                            <li><a class="dropdown-item" href="{% url 'staple_computation' %}">
+                                <i class="bi bi-star-fill me-2"></i>Compute STAPLE Contour
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'spatial_overlap_metrics' %}">
+                                <i class="bi bi-diagram-3 me-2"></i>Compute Spatial Metrics
+                            </a></li>
+                        </ul>
                     </li>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="metricsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-diagram-3 me-1"></i>Spatial Metrics
+                        <a class="nav-link dropdown-toggle" href="#" id="viewDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-eye-fill me-1"></i>View Data
                         </a>
-                        <ul class="dropdown-menu" aria-labelledby="metricsDropdown">
-                            <li><a class="dropdown-item" href="{% url 'spatial_overlap_metrics' %}">
-                                <i class="bi bi-plus-circle me-2"></i>Compute Metrics
+                        <ul class="dropdown-menu" aria-labelledby="viewDropdown">
+                            <li><a class="dropdown-item" href="{% url 'dicom_archive_list' %}">
+                                <i class="bi bi-archive me-2"></i>DICOM Archives
                             </a></li>
+                            <li><a class="dropdown-item" href="{% url 'patient_list' %}">
+                                <i class="bi bi-people me-2"></i>Patients
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'roi_list' %}">
+                                <i class="bi bi-images me-2"></i>Image Series
+                            </a></li>
+                            <li><a class="dropdown-item" href="{% url 'nifti_list' %}">
+                                <i class="bi bi-file-earmark-zip me-2"></i>NIfTI Files
+                            </a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><h6 class="dropdown-header">Results</h6></li>
                             <li><a class="dropdown-item" href="{% url 'spatial_overlap_metrics_list' %}">
-                                <i class="bi bi-table me-2"></i>View Results
+                                <i class="bi bi-table me-2"></i>Spatial Overlap Metrics
                             </a></li>
                         </ul>
                     </li>

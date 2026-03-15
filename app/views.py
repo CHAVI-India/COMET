@@ -143,6 +143,7 @@ def rtstruct_list(request):
     search_patient_name = request.GET.get('patient_name', '').strip()
     search_study_date = request.GET.get('study_date', '').strip()
     search_modality = request.GET.get('modality', '').strip()
+    roi_extracted = request.GET.get('roi_extracted', '').strip()
     
     # Build base queryset
     rtstruct_series_qs = DICOMSeries.objects.filter(
@@ -170,6 +171,16 @@ def rtstruct_list(request):
             modality__icontains=search_modality
         )
     
+    # Apply ROI extraction status filter
+    if roi_extracted == 'extracted':
+        rtstruct_series_qs = rtstruct_series_qs.filter(
+            dicominstance__rtstructroi__isnull=False
+        ).distinct()
+    elif roi_extracted == 'not_extracted':
+        rtstruct_series_qs = rtstruct_series_qs.filter(
+            dicominstance__rtstructroi__isnull=True
+        ).distinct()
+    
     rtstruct_series = rtstruct_series_qs
     
     return render(request, "app/rtstruct_list.html", {
@@ -178,6 +189,7 @@ def rtstruct_list(request):
         "search_patient_name": search_patient_name,
         "search_study_date": search_study_date,
         "search_modality": search_modality,
+        "roi_extracted": roi_extracted,
     })
 
 
@@ -233,6 +245,7 @@ def roi_list(request):
     search_patient_name = request.GET.get('patient_name', '').strip()
     search_study_date = request.GET.get('study_date', '').strip()
     search_modality = request.GET.get('modality', '').strip()
+    nifti_status = request.GET.get('nifti_status', '').strip()
     
     # Build base queryset for referenced series
     referenced_series_qs = DICOMSeries.objects.filter(
@@ -261,6 +274,16 @@ def roi_list(request):
     if search_modality:
         referenced_series_qs = referenced_series_qs.filter(
             modality__icontains=search_modality
+        )
+    
+    # Apply NIfTI status filter
+    if nifti_status == 'converted':
+        referenced_series_qs = referenced_series_qs.exclude(
+            Q(nifti_file_path__isnull=True) | Q(nifti_file_path='')
+        )
+    elif nifti_status == 'not_converted':
+        referenced_series_qs = referenced_series_qs.filter(
+            Q(nifti_file_path__isnull=True) | Q(nifti_file_path='')
         )
     
     # Get all series that are referenced by RTStruct instances (these are CT/MR image series)
@@ -303,6 +326,7 @@ def roi_list(request):
         "search_patient_name": search_patient_name,
         "search_study_date": search_study_date,
         "search_modality": search_modality,
+        "nifti_status": nifti_status,
     })
 
 
@@ -516,12 +540,32 @@ def nifti_list(request):
     from pathlib import Path
     from collections import defaultdict, Counter
     
+    # Get search/filter parameters
+    search_patient_id = request.GET.get('patient_id', '').strip()
+    search_patient_name = request.GET.get('patient_name', '').strip()
+    search_study_date = request.GET.get('study_date', '').strip()
+    search_modality = request.GET.get('modality', '').strip()
+    search_roi_name = request.GET.get('roi_name', '').strip()
+    
     # Get all patients who have any NIfTI data (either image or RTStruct)
     patients_with_nifti = Patient.objects.filter(
         dicomstudy__dicomseries__nifti_file_path__isnull=False
     ).exclude(
         dicomstudy__dicomseries__nifti_file_path=''
-    ).distinct().order_by('patient_id')
+    )
+    
+    # Apply patient filters
+    if search_patient_id:
+        patients_with_nifti = patients_with_nifti.filter(
+            patient_id__icontains=search_patient_id
+        )
+    
+    if search_patient_name:
+        patients_with_nifti = patients_with_nifti.filter(
+            patient_name__icontains=search_patient_name
+        )
+    
+    patients_with_nifti = patients_with_nifti.distinct().order_by('patient_id')
     
     patients_data = []
     
@@ -537,7 +581,13 @@ def nifti_list(request):
             dicomseries__nifti_file_path__isnull=False
         ).exclude(
             dicomseries__nifti_file_path=''
-        ).distinct()
+        )
+        
+        # Apply study date filter
+        if search_study_date:
+            studies = studies.filter(study_date=search_study_date)
+        
+        studies = studies.distinct()
         
         for study in studies:
             # Get image series with NIfTI (exclude RTSTRUCT - only get CT/MR/PT/etc.)
@@ -549,6 +599,12 @@ def nifti_list(request):
             ).exclude(
                 modality='RTSTRUCT'
             )
+            
+            # Apply modality filter
+            if search_modality:
+                image_series_list = image_series_list.filter(
+                    modality__icontains=search_modality
+                )
             
             for img_series in image_series_list:
                 all_image_series.append({
@@ -579,6 +635,12 @@ def nifti_list(request):
                                 all_roi_names.extend(roi_names)
                         except Exception:
                             pass
+                    
+                    # Apply ROI name filter - skip this structure set if no ROI matches
+                    if search_roi_name:
+                        matching_rois = [name for name in roi_names if search_roi_name.lower() in name.lower()]
+                        if not matching_rois:
+                            continue  # Skip this structure set if no ROI names match
                     
                     all_structure_sets.append({
                         'series': rtstruct,
@@ -635,7 +697,47 @@ def nifti_list(request):
                 'staple_rois': sorted(list(staple_rois))
             })
     
-    return render(request, "app/nifti_list.html", {"patients_data": patients_data})
+    # Collect all unique ROI names for dropdown (before filtering)
+    all_roi_names_set = set()
+    for patient in Patient.objects.filter(
+        dicomstudy__dicomseries__nifti_file_path__isnull=False
+    ).exclude(
+        dicomstudy__dicomseries__nifti_file_path=''
+    ).distinct():
+        for study in DICOMStudy.objects.filter(
+            patient=patient,
+            dicomseries__nifti_file_path__isnull=False
+        ).exclude(
+            dicomseries__nifti_file_path=''
+        ).distinct():
+            for rtstruct in DICOMSeries.objects.filter(
+                study=study,
+                modality='RTSTRUCT',
+                nifti_file_path__isnull=False
+            ).exclude(
+                nifti_file_path=''
+            ):
+                metadata_path = Path(settings.MEDIA_ROOT) / rtstruct.nifti_file_path / "rtstruct_metadata.json"
+                if metadata_path.exists():
+                    try:
+                        with open(metadata_path, 'r') as f:
+                            metadata = json.load(f)
+                            roi_names = [roi['name'] for roi in metadata.get('rois', [])]
+                            all_roi_names_set.update(roi_names)
+                    except Exception:
+                        pass
+    
+    available_roi_names = sorted(list(all_roi_names_set))
+    
+    return render(request, "app/nifti_list.html", {
+        "patients_data": patients_data,
+        "search_patient_id": search_patient_id,
+        "search_patient_name": search_patient_name,
+        "search_study_date": search_study_date,
+        "search_modality": search_modality,
+        "search_roi_name": search_roi_name,
+        "available_roi_names": available_roi_names,
+    })
 
 
 @require_POST

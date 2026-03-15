@@ -1,21 +1,21 @@
 {% extends 'app/base.html' %}
 
-{% block title %}Image Series{% endblock %}
+{% block title %}Convert Image Series to NIfTI{% endblock %}
 
 {% block content %}
 <div class="mb-4">
     <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Back to Home
     </a>
-    <a href="{% url 'nifti_list' %}" class="btn btn-outline-info btn-sm ms-2">
+    <a href="{% url 'nifti_list' %}" class="btn btn-primary btn-sm ms-2">
         <i class="bi bi-file-earmark-zip me-1"></i>View NIfTI Files
     </a>
 </div>
 
 <div class="card shadow">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h4 class="mb-0"><i class="bi bi-images me-2"></i>Image Series</h4>
-        <a href="{% url 'rtstruct_list' %}" class="btn btn-primary btn-sm">
+        <h4 class="mb-0"><i class="bi bi-images me-2"></i>Convert Image Series to NIfTI</h4>
+        <a href="{% url 'rtstruct_list' %}" class="btn btn-success btn-sm">
             <i class="bi bi-gear me-1"></i>Extract More ROIs
         </a>
     </div>
@@ -26,33 +26,41 @@
                 <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Search & Filter</h6>
             </div>
             <div class="card-body">
-                <form method="get" action="{% url 'roi_list' %}" class="row g-3">
-                    <div class="col-md-3">
-                        <label for="patient_id" class="form-label">Patient ID</label>
-                        <input type="text" class="form-control" id="patient_id" name="patient_id" 
-                               value="{{ search_patient_id }}" placeholder="Search by Patient ID">
+                <form method="get" action="{% url 'roi_list' %}" class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label for="patient_id" class="form-label small mb-1">Patient ID</label>
+                        <input type="text" class="form-control form-control-sm" id="patient_id" name="patient_id" 
+                               value="{{ search_patient_id }}" placeholder="Patient ID">
                     </div>
-                    <div class="col-md-3">
-                        <label for="patient_name" class="form-label">Patient Name</label>
-                        <input type="text" class="form-control" id="patient_name" name="patient_name" 
-                               value="{{ search_patient_name }}" placeholder="Search by Patient Name">
+                    <div class="col-md-2">
+                        <label for="patient_name" class="form-label small mb-1">Patient Name</label>
+                        <input type="text" class="form-control form-control-sm" id="patient_name" name="patient_name" 
+                               value="{{ search_patient_name }}" placeholder="Patient Name">
                     </div>
-                    <div class="col-md-3">
-                        <label for="study_date" class="form-label">Study Date</label>
-                        <input type="date" class="form-control" id="study_date" name="study_date" 
+                    <div class="col-md-2">
+                        <label for="study_date" class="form-label small mb-1">Study Date</label>
+                        <input type="date" class="form-control form-control-sm" id="study_date" name="study_date" 
                                value="{{ search_study_date }}">
                     </div>
-                    <div class="col-md-3">
-                        <label for="modality" class="form-label">Modality</label>
-                        <input type="text" class="form-control" id="modality" name="modality" 
-                               value="{{ search_modality }}" placeholder="e.g., CT, MR">
+                    <div class="col-md-2">
+                        <label for="modality" class="form-label small mb-1">Modality</label>
+                        <input type="text" class="form-control form-control-sm" id="modality" name="modality" 
+                               value="{{ search_modality }}" placeholder="CT, MR">
                     </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">
+                    <div class="col-md-2">
+                        <label for="nifti_status" class="form-label small mb-1">NIfTI Status</label>
+                        <select class="form-select form-select-sm" id="nifti_status" name="nifti_status">
+                            <option value="">All Series</option>
+                            <option value="converted" {% if nifti_status == 'converted' %}selected{% endif %}>Has NIfTI</option>
+                            <option value="not_converted" {% if nifti_status == 'not_converted' %}selected{% endif %}>No NIfTI</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100 mb-1">
                             <i class="bi bi-search me-1"></i>Search
                         </button>
-                        <a href="{% url 'roi_list' %}" class="btn btn-outline-secondary ms-2">
-                            <i class="bi bi-x-circle me-1"></i>Clear Filters
+                        <a href="{% url 'roi_list' %}" class="btn btn-outline-secondary btn-sm w-100">
+                            <i class="bi bi-x-circle me-1"></i>Clear
                         </a>
                     </div>
                 </form>
@@ -63,8 +71,13 @@
         
         <!-- NIfTI Conversion Form -->
         <div class="alert alert-info mb-3">
-            <i class="bi bi-info-circle me-2"></i>
-            <strong>Convert to NIfTI:</strong> Select image series below by checking the checkboxes, then click the "Convert to NIfTI" button to generate NIfTI files.
+            <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>NIfTI Conversion Workflow</h6>
+            <p class="mb-2"><strong>This page allows you to convert DICOM image series and their associated ROIs to NIfTI format.</strong></p>
+            <ol class="mb-0 small">
+                <li>Select image series below by checking the checkboxes</li>
+                <li>Click <strong>"Convert to NIfTI"</strong> to generate NIfTI files for both images and ROI masks</li>
+                <li>After conversion, view the NIfTI files or proceed to compute spatial overlap metrics</li>
+            </ol>
         </div>
         
         <form id="niftiForm" method="post" action="{% url 'nifti_convert' %}">

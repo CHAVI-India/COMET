@@ -8,8 +8,8 @@
     <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>Back to Home
     </a>
-    <a href="{% url 'roi_list' %}" class="btn btn-outline-primary btn-sm ms-2">
-        <i class="bi bi-bullseye me-1"></i>View All ROIs
+    <a href="{% url 'roi_list' %}" class="btn btn-primary btn-sm ms-2">
+        <i class="bi bi-images me-1"></i>View All Image Series
     </a>
 </div>
 
@@ -19,6 +19,66 @@
         <small class="text-muted">View patients with converted NIfTI structure sets and ROI information</small>
     </div>
     <div class="card-body">
+        <!-- User Guidance -->
+        <div class="alert alert-info mb-4">
+            <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>NIfTI Files & Visualization</h6>
+            <p class="mb-2"><strong>This page displays all image series that have been successfully converted to NIfTI format.</strong></p>
+            <ul class="mb-0 small">
+                <li><strong>View Available NIfTI Files:</strong> Browse patients and their converted image series with associated ROI structure sets</li>
+                <li><strong>Visualize Images:</strong> Use the <strong>WebGL</strong> viewer for fast, GPU-accelerated 3D visualization or <strong>Matplotlib</strong> for legacy 2D slice viewing</li>
+                <li><strong>Structure Sets:</strong> Each patient shows their structure sets with ROI counts and NIfTI conversion status</li>
+                <li><strong>Next Steps:</strong> After viewing, proceed to compute spatial overlap metrics between ROI pairs</li>
+            </ul>
+        </div>
+        
+        <!-- Search and Filter Form -->
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Search & Filter</h6>
+            </div>
+            <div class="card-body">
+                <form method="get" action="{% url 'nifti_list' %}" class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label for="patient_id" class="form-label small mb-1">Patient ID</label>
+                        <input type="text" class="form-control form-control-sm" id="patient_id" name="patient_id" 
+                               value="{{ search_patient_id }}" placeholder="Patient ID">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="patient_name" class="form-label small mb-1">Patient Name</label>
+                        <input type="text" class="form-control form-control-sm" id="patient_name" name="patient_name" 
+                               value="{{ search_patient_name }}" placeholder="Patient Name">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="study_date" class="form-label small mb-1">Study Date</label>
+                        <input type="date" class="form-control form-control-sm" id="study_date" name="study_date" 
+                               value="{{ search_study_date }}">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="modality" class="form-label small mb-1">Modality</label>
+                        <input type="text" class="form-control form-control-sm" id="modality" name="modality" 
+                               value="{{ search_modality }}" placeholder="CT, MR">
+                    </div>
+                    <div class="col-md-2">
+                        <label for="roi_name" class="form-label small mb-1">ROI Name</label>
+                        <select class="form-select form-select-sm" id="roi_name" name="roi_name">
+                            <option value="">All ROIs</option>
+                            {% for roi_name in available_roi_names %}
+                            <option value="{{ roi_name }}" {% if search_roi_name == roi_name %}selected{% endif %}>{{ roi_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100 mb-1">
+                            <i class="bi bi-search me-1"></i>Search
+                        </button>
+                        <a href="{% url 'nifti_list' %}" class="btn btn-outline-secondary btn-sm w-100">
+                            <i class="bi bi-x-circle me-1"></i>Clear
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
         {% if patients_data %}
         
         <!-- Patient List -->
@@ -63,7 +123,7 @@
                             <code>{{ img_data.series.series_instance_uid|truncatechars:50 }}</code>
                             <div class="float-end">
                                 <a href="{% url 'visualize_niivue' img_data.series.id %}" 
-                                   class="btn btn-sm btn-success me-1"
+                                   class="btn btn-sm btn-primary me-1"
                                    title="WebGL Viewer (Fast, GPU-accelerated)">
                                     <i class="bi bi-gpu-card me-1"></i>WebGL
                                 </a>

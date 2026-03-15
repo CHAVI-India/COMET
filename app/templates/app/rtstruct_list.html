@@ -21,33 +21,41 @@
                 <h6 class="mb-0"><i class="bi bi-funnel me-2"></i>Search & Filter</h6>
             </div>
             <div class="card-body">
-                <form method="get" action="{% url 'rtstruct_list' %}" class="row g-3">
-                    <div class="col-md-3">
-                        <label for="patient_id" class="form-label">Patient ID</label>
-                        <input type="text" class="form-control" id="patient_id" name="patient_id" 
-                               value="{{ search_patient_id }}" placeholder="Search by Patient ID">
+                <form method="get" action="{% url 'rtstruct_list' %}" class="row g-2 align-items-end">
+                    <div class="col-md-2">
+                        <label for="patient_id" class="form-label small mb-1">Patient ID</label>
+                        <input type="text" class="form-control form-control-sm" id="patient_id" name="patient_id" 
+                               value="{{ search_patient_id }}" placeholder="Patient ID">
                     </div>
-                    <div class="col-md-3">
-                        <label for="patient_name" class="form-label">Patient Name</label>
-                        <input type="text" class="form-control" id="patient_name" name="patient_name" 
-                               value="{{ search_patient_name }}" placeholder="Search by Patient Name">
+                    <div class="col-md-2">
+                        <label for="patient_name" class="form-label small mb-1">Patient Name</label>
+                        <input type="text" class="form-control form-control-sm" id="patient_name" name="patient_name" 
+                               value="{{ search_patient_name }}" placeholder="Patient Name">
                     </div>
-                    <div class="col-md-3">
-                        <label for="study_date" class="form-label">Study Date</label>
-                        <input type="date" class="form-control" id="study_date" name="study_date" 
+                    <div class="col-md-2">
+                        <label for="study_date" class="form-label small mb-1">Study Date</label>
+                        <input type="date" class="form-control form-control-sm" id="study_date" name="study_date" 
                                value="{{ search_study_date }}">
                     </div>
-                    <div class="col-md-3">
-                        <label for="modality" class="form-label">Modality</label>
-                        <input type="text" class="form-control" id="modality" name="modality" 
-                               value="{{ search_modality }}" placeholder="e.g., RTSTRUCT">
+                    <div class="col-md-2">
+                        <label for="modality" class="form-label small mb-1">Modality</label>
+                        <input type="text" class="form-control form-control-sm" id="modality" name="modality" 
+                               value="{{ search_modality }}" placeholder="RTSTRUCT">
                     </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">
+                    <div class="col-md-2">
+                        <label for="roi_extracted" class="form-label small mb-1">ROI Status</label>
+                        <select class="form-select form-select-sm" id="roi_extracted" name="roi_extracted">
+                            <option value="">All Series</option>
+                            <option value="extracted" {% if roi_extracted == 'extracted' %}selected{% endif %}>ROI Extracted</option>
+                            <option value="not_extracted" {% if roi_extracted == 'not_extracted' %}selected{% endif %}>Not Extracted</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100 mb-1">
                             <i class="bi bi-search me-1"></i>Search
                         </button>
-                        <a href="{% url 'rtstruct_list' %}" class="btn btn-outline-secondary ms-2">
-                            <i class="bi bi-x-circle me-1"></i>Clear Filters
+                        <a href="{% url 'rtstruct_list' %}" class="btn btn-outline-secondary btn-sm w-100">
+                            <i class="bi bi-x-circle me-1"></i>Clear
                         </a>
                     </div>
                 </form>
@@ -55,11 +63,25 @@
         </div>
         
         {% if rtstruct_series %}
+        
+        <!-- User Guidance -->
+        <div class="alert alert-info mb-4">
+            <h6 class="alert-heading"><i class="bi bi-info-circle me-2"></i>Important: Workflow Step</h6>
+            <p class="mb-2">
+                <strong>Extract ROI Information</strong> from RT Structure Sets before converting to NIfTI files.
+            </p>
+            <ol class="mb-0 small">
+                <li>Select the RT Structure Set instances below by checking the checkboxes</li>
+                <li>Click <strong>"Extract ROI Information"</strong> to extract ROI metadata and contours</li>
+                <li>After extraction completes, proceed to <strong>Image Series</strong> page to convert to NIfTI format</li>
+            </ol>
+        </div>
+        
         <form id="rtstructForm" method="post" action="{% url 'rtstruct_extract' %}">
             {% csrf_token %}
             
             <div class="mb-3">
-                <button type="button" id="extractBtn" class="btn btn-primary" disabled>
+                <button type="button" id="extractBtn" class="btn btn-success" disabled>
                     <i class="bi bi-gear me-2"></i>Extract ROI Information
                 </button>
                 <span id="selectedCount" class="ms-2 text-muted">No instances selected</span>

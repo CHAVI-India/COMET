@@ -324,3 +324,21 @@ docker-compose -f docker-compose.yml up --build -d
 ```
 
  
+# Standing on the Shoulders of Giants !
+
+COMET would not be possible without the hard work of several people who have selflessly contributed open source code for the humankind. While the list of packages are available in the `requirements.txt` file, we would like to specifically acknowledge the following projects:
+
+| Package | Citation | DOI/URL |
+|---------|----------|---------|
+| **Django** | Django Software Foundation. Django Web Framework. https://djangoproject.com | https://djangoproject.com |
+| **Celery** | Ask Solem & contributors. Celery: Distributed Task Queue. https://docs.celeryq.dev | https://github.com/celery/celery |
+| **RabbitMQ** | Pivotal Software, Inc. RabbitMQ: Message Broker. https://www.rabbitmq.com | https://www.rabbitmq.com |
+| **PostgreSQL** | The PostgreSQL Global Development Group. PostgreSQL: The World's Most Advanced Open Source Relational Database. https://www.postgresql.org | https://www.postgresql.org |
+| **SimpleITK** | Lowekamp BC, Chen DT, Ibáñez L, Blezek D. The Design of SimpleITK. Front. Neuroinform. 2013;7:45. | https://doi.org/10.3389/fninf.2013.00045 |
+| **Platipy** | Chlap P, Finnegan RN. PlatiPy: Processing Library and Analysis Toolkit for Medical Imaging in Python. Journal of Open Source Software. 2023;8(86):5374. | https://doi.org/10.21105/joss.05374 |
+| **scikit-image** | van der Walt S, Schönberger JL, Nunez-Iglesias J, et al. scikit-image: image processing in Python. PeerJ. 2014;2:e453. | https://doi.org/10.7717/peerj.453 |
+| **SciPy** | Virtanen P, Gommers R, Oliphant TE, et al. SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python. Nature Methods. 2020;17(3):261-272. | https://doi.org/10.1038/s41592-019-0686-2 |
+| **NumPy** | Harris CR, Millman KJ, van der Walt SJ, et al. Array programming with NumPy. Nature. 2020;585(7825):357-362. | https://doi.org/10.1038/s41586-020-2649-2 |
+| **pandas** | McKinney W. Data Structures for Statistical Computing in Python. Proceedings of the 9th Python in Science Conference. 2010:56-61. | https://doi.org/10.25080/Majora-92bf1922-00a |
+| **Matplotlib** | Hunter JD. Matplotlib: A 2D Graphics Environment. Computing in Science & Engineering. 2007;9(3):90-95. | https://doi.org/10.1109/MCSE.2007.55 |
+| **NiiVue** | NiiVue Contributors. NiiVue: WebGL2-based Medical Image Viewer. https://github.com/niivue/niivue | https://github.com/niivue/niivue |

@@ -181,6 +181,13 @@
                                             data-bs-target="#rois-{{ ss.series_id }}">
                                         <i class="bi bi-list-ul me-1"></i>View ROIs
                                     </button>
+                                    {% if ss.instance_id %}
+                                    <a href="{% url 'segmentation_editor' ss.instance_id %}" 
+                                       class="btn btn-sm btn-success ms-1"
+                                       title="Open Segmentation Editor">
+                                        <i class="bi bi-brush me-1"></i>Segment
+                                    </a>
+                                    {% endif %}
                                 </td>
                             </tr>
                             <tr class="collapse" id="rois-{{ ss.series_id }}">

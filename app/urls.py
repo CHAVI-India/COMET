@@ -41,4 +41,9 @@ urlpatterns = [
     # Task Monitoring
     path("tasks/", views.task_list, name="task_list"),
     path("tasks/<str:task_id>/", views.task_detail, name="task_detail"),
+    # Segmentation
+    path("segmentation/<int:instance_id>/", views.segmentation_editor, name="segmentation_editor"),
+    path("api/segmentation/save/", views.save_segmentation, name="save_segmentation"),
+    path("api/nifti-volume/<int:series_id>/", views.get_nifti_volume_data, name="get_nifti_volume_data"),
+    path("api/serve-nifti/<int:series_id>/", views.serve_nifti_file, name="serve_nifti_file"),
 ]

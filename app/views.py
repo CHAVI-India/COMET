@@ -642,9 +642,14 @@ def nifti_list(request):
                         if not matching_rois:
                             continue  # Skip this structure set if no ROI names match
                     
+                    # Get the first instance for this RTSTRUCT series (for segmentation editor)
+                    first_instance = rtstruct.dicominstance_set.first()
+                    instance_id = first_instance.id if first_instance else None
+                    
                     all_structure_sets.append({
                         'series': rtstruct,
                         'series_id': rtstruct.id,
+                        'instance_id': instance_id,
                         'roi_count': roi_count,
                         'roi_names': roi_names,
                         'roi_names_with_staple': [],  # Will be populated later
@@ -2064,3 +2069,334 @@ def task_detail(request, task_id):
     }
     
     return render(request, 'app/task_detail.html', context)
+
+
+def segmentation_editor(request, instance_id):
+    """View to display segmentation editor for a specific RTSTRUCT instance."""
+    from django.contrib.auth.decorators import login_required
+    import json
+    from pathlib import Path
+    
+    # Require authentication
+    if not request.user.is_authenticated:
+        messages.error(request, "You must be logged in to perform segmentation.")
+        return redirect('login')
+    
+    # Get the RTSTRUCT instance
+    instance = get_object_or_404(
+        DICOMInstance.objects.select_related(
+            'series__study__patient',
+            'referenced_series_instance_uid'
+        ),
+        id=instance_id,
+        series__modality='RTSTRUCT'
+    )
+    
+    # Get the referenced image series
+    image_series = instance.referenced_series_instance_uid
+    if not image_series:
+        messages.error(request, "No referenced image series found for this structure set.")
+        return redirect('nifti_list')
+    
+    # Check if image series has NIfTI file
+    if not image_series.nifti_file_path:
+        messages.error(request, "Image series must be converted to NIfTI first.")
+        return redirect('nifti_list')
+    
+    # Get existing ROIs for this structure set
+    existing_rois = RTStructROI.objects.filter(
+        instance=instance
+    ).select_related('roi_segmentation_username_id')
+    
+    # Get metadata if available
+    metadata = None
+    if instance.series.nifti_file_path:
+        metadata_path = Path(settings.MEDIA_ROOT) / instance.series.nifti_file_path / "rtstruct_metadata.json"
+        if metadata_path.exists():
+            try:
+                with open(metadata_path, 'r') as f:
+                    metadata = json.load(f)
+            except Exception as e:
+                logger.warning(f"Failed to read metadata: {e}")
+    
+    context = {
+        'instance': instance,
+        'image_series': image_series,
+        'patient': instance.series.study.patient,
+        'study': instance.series.study,
+        'existing_rois': existing_rois,
+        'metadata': metadata,
+        'user': request.user
+    }
+    
+    return render(request, 'app/segmentation_editor.html', context)
+
+
+@require_POST
+def save_segmentation(request):
+    """API endpoint to save a user's segmentation to disk and database."""
+    import numpy as np
+    import nibabel as nib
+    from pathlib import Path
+    from app.utils.dcm_to_nifti_converter import sanitize_for_path
+    import json
+    import base64
+    
+    # Require authentication
+    if not request.user.is_authenticated:
+        return JsonResponse({
+            'success': False,
+            'error': 'Authentication required'
+        }, status=401)
+    
+    try:
+        # Get parameters
+        instance_id = request.POST.get('instance_id')
+        roi_name = request.POST.get('roi_name', '').strip()
+        segmentation_data = request.POST.get('segmentation_data')  # Base64 encoded binary data
+        
+        if not instance_id or not roi_name or not segmentation_data:
+            return JsonResponse({
+                'success': False,
+                'error': 'Missing required parameters'
+            })
+        
+        # Get the RTSTRUCT instance
+        instance = get_object_or_404(
+            DICOMInstance.objects.select_related(
+                'series__study__patient',
+                'referenced_series_instance_uid'
+            ),
+            id=instance_id,
+            series__modality='RTSTRUCT'
+        )
+        
+        # Get the referenced image series
+        image_series = instance.referenced_series_instance_uid
+        if not image_series or not image_series.nifti_file_path:
+            return JsonResponse({
+                'success': False,
+                'error': 'Referenced image series not found or not converted to NIfTI'
+            })
+        
+        # Load the reference NIfTI to get header information
+        reference_nifti_path = Path(settings.MEDIA_ROOT) / image_series.nifti_file_path
+        if not reference_nifti_path.exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'Reference NIfTI file not found'
+            })
+        
+        reference_img = nib.load(str(reference_nifti_path))
+        
+        # Decode the segmentation data
+        try:
+            segmentation_bytes = base64.b64decode(segmentation_data)
+            # Convert to numpy array (assuming uint8 labelmap)
+            segmentation_array = np.frombuffer(segmentation_bytes, dtype=np.uint8)
+            # Reshape to match reference image dimensions
+            segmentation_array = segmentation_array.reshape(reference_img.shape)
+        except Exception as e:
+            logger.error(f"Failed to decode segmentation data: {e}")
+            return JsonResponse({
+                'success': False,
+                'error': f'Failed to decode segmentation data: {str(e)}'
+            })
+        
+        # Create NIfTI image with same header as reference
+        segmentation_img = nib.Nifti1Image(
+            segmentation_array,
+            reference_img.affine,
+            reference_img.header
+        )
+        
+        # Create directory structure for user segmentations
+        patient_id = sanitize_for_path(instance.series.study.patient.patient_id)
+        study_uid = sanitize_for_path(instance.series.study.study_instance_uid)
+        series_uid = sanitize_for_path(instance.series.series_instance_uid)
+        username = sanitize_for_path(request.user.username)
+        
+        # Save to: nifti_files/{patient_id}/{study_uid}/{series_uid}/user_segmentations/{username}/
+        user_seg_dir = Path(settings.MEDIA_ROOT) / "nifti_files" / patient_id / study_uid / series_uid / "user_segmentations" / username
+        user_seg_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Create filename with username suffix
+        safe_roi_name = sanitize_for_path(roi_name)
+        segmentation_filename = f"{safe_roi_name}_{username}.nii.gz"
+        segmentation_path = user_seg_dir / segmentation_filename
+        
+        # Save the NIfTI file
+        nib.save(segmentation_img, str(segmentation_path))
+        
+        # Save to database
+        # Check if ROI already exists for this user
+        roi, created = RTStructROI.objects.update_or_create(
+            instance=instance,
+            roi_name=f"{roi_name}_{username}",
+            roi_segmentation_username_id=request.user,
+            defaults={
+                'roi_description': f'User segmentation by {request.user.username}',
+                'roi_generation_algorithm': 'Manual segmentation via Cornerstone.js'
+            }
+        )
+        
+        # Store the relative path in the database (we could add a field for this)
+        relative_path = str(segmentation_path.relative_to(settings.MEDIA_ROOT))
+        
+        logger.info(f"Saved segmentation for user {request.user.username}: {relative_path}")
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Segmentation saved successfully as {roi_name}_{username}',
+            'roi_id': roi.id,
+            'roi_name': roi.roi_name,
+            'file_path': relative_path,
+            'created': created
+        })
+        
+    except Exception as e:
+        logger.error(f"Error saving segmentation: {e}", exc_info=True)
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def serve_nifti_file(request, series_id):
+    """Serve NIfTI file - decompress .nii.gz to .nii for browser compatibility."""
+    from django.http import HttpResponse
+    from pathlib import Path
+    import gzip
+    import re
+    
+    try:
+        series = get_object_or_404(DICOMSeries, id=series_id)
+        
+        if not series.nifti_file_path:
+            return JsonResponse({
+                'success': False,
+                'error': 'NIfTI file not found for this series'
+            }, status=404)
+        
+        nifti_path = Path(settings.MEDIA_ROOT) / series.nifti_file_path
+        if not nifti_path.exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'NIfTI file does not exist on disk'
+            }, status=404)
+        
+        # Decompress the .nii.gz file to get raw .nii data
+        logger.info(f"Decompressing NIfTI file for series {series_id}")
+        with gzip.open(nifti_path, 'rb') as f:
+            decompressed_content = f.read()
+        
+        file_size = len(decompressed_content)
+        
+        # Check for range request
+        range_header = request.META.get('HTTP_RANGE', '')
+        
+        logger.info(f"Serving decompressed NIfTI file for series {series_id}, size: {file_size}, range: {range_header or 'none'}")
+        
+        if range_header:
+            # Parse range header (e.g., "bytes=0-1023")
+            range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+            if range_match:
+                start = int(range_match.group(1))
+                end = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+                
+                # Get only the requested range
+                content = decompressed_content[start:end+1]
+                
+                # Create 206 Partial Content response
+                response = HttpResponse(content, content_type='application/octet-stream', status=206)
+                response['Content-Range'] = f'bytes {start}-{end}/{file_size}'
+                response['Content-Length'] = len(content)
+            else:
+                # Invalid range, return full file
+                response = HttpResponse(decompressed_content, content_type='application/octet-stream')
+                response['Content-Length'] = file_size
+        else:
+            # No range request, return full decompressed file
+            response = HttpResponse(decompressed_content, content_type='application/octet-stream')
+            response['Content-Length'] = file_size
+        
+        # Set filename (change .nii.gz to .nii)
+        filename = nifti_path.name.replace('.nii.gz', '.nii')
+        response['Content-Disposition'] = f'inline; filename="{filename}"'
+        
+        # Add CORS headers
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Range, Content-Type'
+        response['Access-Control-Expose-Headers'] = 'Content-Range, Content-Length'
+        
+        # Enable range requests
+        response['Accept-Ranges'] = 'bytes'
+        
+        # Important: Do NOT set Content-Encoding header
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error serving NIfTI file: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+def get_nifti_volume_data(request, series_id):
+    """API endpoint to get NIfTI volume data for Cornerstone.js."""
+    import nibabel as nib
+    from pathlib import Path
+    import numpy as np
+    import base64
+    
+    try:
+        series = get_object_or_404(DICOMSeries, id=series_id)
+        
+        if not series.nifti_file_path:
+            return JsonResponse({
+                'success': False,
+                'error': 'NIfTI file not found for this series'
+            })
+        
+        nifti_path = Path(settings.MEDIA_ROOT) / series.nifti_file_path
+        if not nifti_path.exists():
+            return JsonResponse({
+                'success': False,
+                'error': 'NIfTI file does not exist on disk'
+            })
+        
+        # Load NIfTI file
+        img = nib.load(str(nifti_path))
+        data = img.get_fdata()
+        
+        # Get metadata
+        shape = data.shape
+        affine = img.affine.tolist()
+        header = {
+            'pixdim': img.header['pixdim'].tolist(),
+            'dim': img.header['dim'].tolist(),
+        }
+        
+        # Construct the custom serving URL for the NIfTI file (without Content-Encoding: gzip)
+        from django.urls import reverse
+        serve_url = request.build_absolute_uri(reverse('serve_nifti_file', args=[series_id]))
+        
+        return JsonResponse({
+            'success': True,
+            'shape': shape,
+            'affine': affine,
+            'header': header,
+            'datatype': str(data.dtype),
+            'file_path': str(series.nifti_file_path),
+            'file_url': serve_url
+        })
+        
+    except Exception as e:
+        logger.error(f"Error loading NIfTI volume: {e}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)

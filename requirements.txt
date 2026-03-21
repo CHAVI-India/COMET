@@ -15,7 +15,9 @@ crashtest==0.4.1
 cycler==0.12.1
 dataclasses==0.6
 dcmrtstruct2nii==5
+dicomweb-client==0.60.1
 Django==6.0.3
+django-cors-headers==4.9.0
 django_celery_results==2.6.0
 dotenv==0.9.9
 fonttools==4.62.1
@@ -34,6 +36,7 @@ opencv-python==4.13.0.92
 packaging==26.0
 pandas==3.0.1
 pillow==12.1.1
+platipy==0.7.2
 prompt_toolkit==3.0.52
 psycopg2-binary==2.9.11
 pydicom==3.0.2
@@ -45,6 +48,7 @@ python-gdcm==3.2.2
 pytz==2026.1.post1
 RapidFuzz==3.14.3
 requests==2.32.5
+retrying==1.4.2
 rt-utils==1.2.7
 scikit-image==0.26.0
 scikit-learn==1.8.0

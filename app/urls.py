@@ -46,4 +46,16 @@ urlpatterns = [
     path("api/segmentation/save/", views.save_segmentation, name="save_segmentation"),
     path("api/nifti-volume/<int:series_id>/", views.get_nifti_volume_data, name="get_nifti_volume_data"),
     path("api/serve-nifti/<int:series_id>/", views.serve_nifti_file, name="serve_nifti_file"),
+    # OHIF Viewer Integration
+    path("ohif/<int:study_id>/", views.ohif_viewer, name="ohif_viewer"),
+    # DICOMweb API Endpoints
+    path("dicomweb/wado", views.wado_uri, name="wado_uri"),
+    path("dicomweb", views.wado_uri, name="wado_uri_short"),
+    path("dicomweb/studies", views.dicomweb_studies_handler, name="dicomweb_studies"),
+    path("dicomweb/studies/<str:study_uid>", views.dicomweb_store, name="dicomweb_store_study"),
+    path("dicomweb/studies/<str:study_uid>/series", views.dicomweb_study_series, name="dicomweb_study_series"),
+    path("dicomweb/studies/<str:study_uid>/series/<str:series_uid>/metadata", views.dicomweb_series_metadata, name="dicomweb_series_metadata"),
+    path("dicomweb/studies/<str:study_uid>/series/<str:series_uid>/instances", views.dicomweb_series_instances, name="dicomweb_series_instances"),
+    path("dicomweb/studies/<str:study_uid>/series/<str:series_uid>/instances/<str:instance_uid>", views.dicomweb_instance, name="dicomweb_instance"),
+    path("dicomweb/studies/<str:study_uid>/series/<str:series_uid>/instances/<str:instance_uid>/frames/<int:frame_number>", views.dicomweb_instance_frames, name="dicomweb_instance_frames"),
 ]

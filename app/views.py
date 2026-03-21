@@ -2404,3 +2404,510 @@ def get_nifti_volume_data(request, series_id):
             'success': False,
             'error': str(e)
         }, status=500)
+
+
+# ============================================================================
+# DICOMweb API Endpoints for OHIF Viewer Integration
+# ============================================================================
+
+def dicomweb_studies_handler(request):
+    """Handle both GET (QIDO-RS) and POST (STOW-RS) for /studies endpoint."""
+    if request.method == 'GET':
+        return dicomweb_studies(request)
+    elif request.method == 'POST':
+        return dicomweb_store(request, study_uid=None)
+    elif request.method == 'OPTIONS':
+        return dicomweb_options(request)
+    else:
+        from django.http import JsonResponse
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+
+def dicomweb_studies(request):
+    """QIDO-RS: Search for studies."""
+    import pydicom
+    from django.http import JsonResponse
+    
+    try:
+        # Get query parameters
+        patient_id = request.GET.get('PatientID', '')
+        patient_name = request.GET.get('PatientName', '')
+        study_date = request.GET.get('StudyDate', '')
+        
+        # Build queryset
+        studies_qs = DICOMStudy.objects.select_related('patient').all()
+        
+        if patient_id:
+            studies_qs = studies_qs.filter(patient__patient_id__icontains=patient_id)
+        if patient_name:
+            studies_qs = studies_qs.filter(patient__patient_name__icontains=patient_name)
+        if study_date:
+            studies_qs = studies_qs.filter(study_date=study_date)
+        
+        # Build DICOMweb JSON response
+        results = []
+        for study in studies_qs:
+            study_data = {
+                "0020000D": {"vr": "UI", "Value": [study.study_instance_uid]},
+                "00100020": {"vr": "LO", "Value": [study.patient.patient_id]},
+                "00100010": {"vr": "PN", "Value": [{"Alphabetic": study.patient.patient_name or ""}]},
+                "00080020": {"vr": "DA", "Value": [study.study_date.strftime("%Y%m%d") if study.study_date else ""]},
+                "00080050": {"vr": "SH", "Value": [""]},  # Accession Number
+                "00081030": {"vr": "LO", "Value": [""]},  # Study Description
+                "00200010": {"vr": "SH", "Value": [""]},  # Study ID
+            }
+            results.append(study_data)
+        
+        response = JsonResponse(results, safe=False)
+        response['Content-Type'] = 'application/dicom+json'
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in dicomweb_studies: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def dicomweb_study_series(request, study_uid):
+    """QIDO-RS: Search for series in a study."""
+    from django.http import JsonResponse
+    
+    try:
+        study = get_object_or_404(DICOMStudy, study_instance_uid=study_uid)
+        series_list = DICOMSeries.objects.filter(study=study)
+        
+        results = []
+        for series in series_list:
+            # Count instances in this series
+            instance_count = DICOMInstance.objects.filter(series=series).count()
+            
+            series_data = {
+                "0020000E": {"vr": "UI", "Value": [series.series_instance_uid]},
+                "0020000D": {"vr": "UI", "Value": [study.study_instance_uid]},
+                "00080060": {"vr": "CS", "Value": [series.modality or ""]},
+                "0020000E": {"vr": "UI", "Value": [series.series_instance_uid]},
+                "00200011": {"vr": "IS", "Value": ["1"]},  # Series Number
+                "00080021": {"vr": "DA", "Value": [series.series_date.strftime("%Y%m%d") if series.series_date else ""]},
+                "0008103E": {"vr": "LO", "Value": [""]},  # Series Description
+                "00201209": {"vr": "IS", "Value": [str(instance_count)]},  # Number of Series Related Instances
+            }
+            results.append(series_data)
+        
+        response = JsonResponse(results, safe=False)
+        response['Content-Type'] = 'application/dicom+json'
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in dicomweb_study_series: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def dicomweb_series_metadata(request, study_uid, series_uid):
+    """WADO-RS: Retrieve metadata for all instances in a series."""
+    from django.http import JsonResponse
+    import pydicom
+    from pydicom.multival import MultiValue
+    from pydicom.dataset import Dataset
+    from pydicom.sequence import Sequence
+    
+    def convert_value(value, vr):
+        """Convert DICOM value to DICOMweb JSON format."""
+        if value is None or value == '':
+            return []
+        elif isinstance(value, bytes):
+            return [value.decode('utf-8', errors='ignore')]
+        elif isinstance(value, MultiValue):
+            # Keep numeric types as numbers, not strings
+            if vr in ['DS', 'FL', 'FD']:
+                return [float(v) for v in value]
+            elif vr in ['IS', 'SL', 'SS', 'UL', 'US']:
+                return [int(v) for v in value]
+            else:
+                return [str(v) for v in value]
+        elif isinstance(value, (list, tuple)):
+            if vr in ['DS', 'FL', 'FD']:
+                return [float(v) for v in value]
+            elif vr in ['IS', 'SL', 'SS', 'UL', 'US']:
+                return [int(v) for v in value]
+            else:
+                return [str(v) for v in value]
+        elif isinstance(value, (int, float)):
+            return [value]
+        elif isinstance(value, str):
+            return [value]
+        else:
+            return [str(value)]
+    
+    def dataset_to_dict(ds):
+        """Recursively convert DICOM dataset to DICOMweb JSON."""
+        result = {}
+        for elem in ds:
+            tag = f"{elem.tag.group:04X}{elem.tag.element:04X}"
+            
+            if elem.VR == 'SQ':
+                # Handle sequences
+                seq_value = []
+                if elem.value:
+                    for item in elem.value:
+                        seq_value.append(dataset_to_dict(item))
+                result[tag] = {
+                    "vr": elem.VR,
+                    "Value": seq_value
+                }
+            else:
+                result[tag] = {
+                    "vr": elem.VR,
+                    "Value": convert_value(elem.value, elem.VR)
+                }
+        return result
+    
+    try:
+        series = get_object_or_404(DICOMSeries, series_instance_uid=series_uid)
+        instances = DICOMInstance.objects.filter(series=series).order_by('instance_number')
+        
+        results = []
+        for instance in instances:
+            if not instance.instance_file_path or not os.path.exists(instance.instance_file_path):
+                continue
+                
+            # Read DICOM file and convert to JSON
+            ds = pydicom.dcmread(instance.instance_file_path)
+            dicom_json = dataset_to_dict(ds)
+            results.append(dicom_json)
+        
+        response = JsonResponse(results, safe=False)
+        response['Content-Type'] = 'application/dicom+json'
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in dicomweb_series_metadata: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def dicomweb_series_instances(request, study_uid, series_uid):
+    """QIDO-RS: Search for instances in a series."""
+    from django.http import JsonResponse
+    
+    try:
+        series = get_object_or_404(DICOMSeries, series_instance_uid=series_uid)
+        instances = DICOMInstance.objects.filter(series=series).order_by('instance_number')
+        
+        results = []
+        for instance in instances:
+            instance_data = {
+                "00080018": {"vr": "UI", "Value": [instance.sop_instance_uid]},
+                "0020000E": {"vr": "UI", "Value": [series.series_instance_uid]},
+                "0020000D": {"vr": "UI", "Value": [study_uid]},
+                "00200013": {"vr": "IS", "Value": [str(instance.instance_number or 1)]},
+                "00080016": {"vr": "UI", "Value": ["1.2.840.10008.5.1.4.1.1.2"]},  # SOP Class UID (CT Image Storage)
+            }
+            results.append(instance_data)
+        
+        response = JsonResponse(results, safe=False)
+        response['Content-Type'] = 'application/dicom+json'
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in dicomweb_series_instances: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def dicomweb_instance(request, study_uid, series_uid, instance_uid):
+    """WADO-RS: Retrieve a DICOM instance."""
+    from django.http import HttpResponse, FileResponse
+    import pydicom
+    
+    try:
+        instance = get_object_or_404(DICOMInstance, sop_instance_uid=instance_uid)
+        
+        if not instance.instance_file_path or not os.path.exists(instance.instance_file_path):
+            return JsonResponse({'error': 'DICOM file not found'}, status=404)
+        
+        # Check Accept header
+        accept = request.META.get('HTTP_ACCEPT', '')
+        
+        if 'application/dicom' in accept or 'multipart/related' in accept:
+            # Return DICOM file
+            response = FileResponse(open(instance.instance_file_path, 'rb'), content_type='application/dicom')
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            return response
+        else:
+            # Return as JSON (DICOMweb JSON format)
+            ds = pydicom.dcmread(instance.instance_file_path)
+            
+            # Convert to JSON (simplified)
+            dicom_json = {}
+            for elem in ds:
+                if elem.VR != 'SQ':  # Skip sequences for now
+                    tag = f"{elem.tag.group:04X}{elem.tag.element:04X}"
+                    value = elem.value
+                    if isinstance(value, bytes):
+                        value = value.decode('utf-8', errors='ignore')
+                    dicom_json[tag] = {
+                        "vr": elem.VR,
+                        "Value": [value] if value else []
+                    }
+            
+            response = JsonResponse(dicom_json)
+            response['Content-Type'] = 'application/dicom+json'
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            return response
+        
+    except Exception as e:
+        logger.error(f"Error in dicomweb_instance: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def dicomweb_instance_frames(request, study_uid, series_uid, instance_uid, frame_number):
+    """WADO-RS: Retrieve frames from a DICOM instance."""
+    from django.http import HttpResponse
+    import pydicom
+    import numpy as np
+    import struct
+    
+    try:
+        instance = get_object_or_404(DICOMInstance, sop_instance_uid=instance_uid)
+        
+        if not instance.instance_file_path or not os.path.exists(instance.instance_file_path):
+            return JsonResponse({'error': 'DICOM file not found'}, status=404)
+        
+        ds = pydicom.dcmread(instance.instance_file_path)
+        
+        # Get pixel data
+        if hasattr(ds, 'pixel_array'):
+            pixel_array = ds.pixel_array
+            
+            # Handle multi-frame
+            if len(pixel_array.shape) > 2:
+                frame_idx = int(frame_number) - 1
+                if frame_idx < pixel_array.shape[0]:
+                    frame_data = pixel_array[frame_idx]
+                else:
+                    return JsonResponse({'error': 'Frame number out of range'}, status=404)
+            else:
+                frame_data = pixel_array
+            
+            # Return raw pixel data as bytes
+            # OHIF expects uncompressed pixel data
+            pixel_bytes = frame_data.tobytes()
+            
+            # Determine content type based on bits allocated
+            bits_allocated = getattr(ds, 'BitsAllocated', 16)
+            samples_per_pixel = getattr(ds, 'SamplesPerPixel', 1)
+            
+            if samples_per_pixel == 1:
+                # Grayscale
+                content_type = 'application/octet-stream'
+            else:
+                # Color
+                content_type = 'application/octet-stream'
+            
+            response = HttpResponse(pixel_bytes, content_type=content_type)
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            response['Access-Control-Expose-Headers'] = 'Content-Length'
+            response['Content-Length'] = len(pixel_bytes)
+            return response
+        else:
+            return JsonResponse({'error': 'No pixel data in DICOM file'}, status=404)
+        
+    except Exception as e:
+        logger.error(f"Error in dicomweb_instance_frames: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def wado_uri(request):
+    """WADO-URI: Retrieve DICOM instance using query parameters."""
+    from django.http import FileResponse, JsonResponse
+    
+    try:
+        # Get query parameters
+        request_type = request.GET.get('requestType', '')
+        study_uid = request.GET.get('studyUID', '')
+        series_uid = request.GET.get('seriesUID', '')
+        object_uid = request.GET.get('objectUID', '')
+        
+        if request_type != 'WADO':
+            return JsonResponse({'error': 'Invalid requestType'}, status=400)
+        
+        if not object_uid:
+            return JsonResponse({'error': 'objectUID required'}, status=400)
+        
+        # Find the instance
+        instance = get_object_or_404(DICOMInstance, sop_instance_uid=object_uid)
+        
+        if not instance.instance_file_path or not os.path.exists(instance.instance_file_path):
+            return JsonResponse({'error': 'DICOM file not found'}, status=404)
+        
+        # Return the DICOM file
+        response = FileResponse(open(instance.instance_file_path, 'rb'), content_type='application/dicom')
+        response['Access-Control-Allow-Origin'] = '*'
+        response['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error in wado_uri: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def dicomweb_store(request, study_uid=None):
+    """STOW-RS: Store DICOM instances (for saving modified RT structures)."""
+    from django.http import JsonResponse
+    import pydicom
+    from datetime import datetime
+    import tempfile
+    
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        # Parse multipart/related content
+        content_type = request.META.get('CONTENT_TYPE', '')
+        
+        if 'multipart/related' in content_type:
+            # Handle multipart DICOM upload
+            files = request.FILES.getlist('file')
+            
+            stored_instances = []
+            
+            for uploaded_file in files:
+                # Save to temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.dcm') as tmp_file:
+                    for chunk in uploaded_file.chunks():
+                        tmp_file.write(chunk)
+                    tmp_path = tmp_file.name
+                
+                try:
+                    # Read DICOM file
+                    ds = pydicom.dcmread(tmp_path)
+                    
+                    # Extract metadata
+                    study_instance_uid = str(ds.StudyInstanceUID)
+                    series_instance_uid = str(ds.SeriesInstanceUID)
+                    sop_instance_uid = str(ds.SOPInstanceUID)
+                    
+                    # Get or create study
+                    patient_id = str(ds.PatientID) if hasattr(ds, 'PatientID') else 'UNKNOWN'
+                    patient, _ = Patient.objects.get_or_create(
+                        patient_id=patient_id,
+                        defaults={
+                            'patient_name': str(ds.PatientName) if hasattr(ds, 'PatientName') else '',
+                        }
+                    )
+                    
+                    study, _ = DICOMStudy.objects.get_or_create(
+                        study_instance_uid=study_instance_uid,
+                        defaults={'patient': patient}
+                    )
+                    
+                    # Get or create series
+                    series, _ = DICOMSeries.objects.get_or_create(
+                        series_instance_uid=series_instance_uid,
+                        defaults={
+                            'study': study,
+                            'modality': str(ds.Modality) if hasattr(ds, 'Modality') else 'RTSTRUCT',
+                        }
+                    )
+                    
+                    # Save DICOM file to media directory
+                    from pathlib import Path
+                    dicom_dir = Path(settings.MEDIA_ROOT) / 'dicom_files' / patient_id / study_instance_uid / series_instance_uid
+                    dicom_dir.mkdir(parents=True, exist_ok=True)
+                    
+                    final_path = dicom_dir / f"{sop_instance_uid}.dcm"
+                    
+                    # Move temp file to final location
+                    import shutil
+                    shutil.move(tmp_path, str(final_path))
+                    
+                    # Create or update instance
+                    instance, created = DICOMInstance.objects.update_or_create(
+                        sop_instance_uid=sop_instance_uid,
+                        defaults={
+                            'series': series,
+                            'instance_file_path': str(final_path),
+                            'structure_set_label': str(ds.StructureSetLabel) if hasattr(ds, 'StructureSetLabel') else None,
+                        }
+                    )
+                    
+                    stored_instances.append({
+                        'SOPInstanceUID': sop_instance_uid,
+                        'status': 'created' if created else 'updated'
+                    })
+                    
+                    logger.info(f"Stored DICOM instance: {sop_instance_uid} ({'created' if created else 'updated'})")
+                    
+                except Exception as e:
+                    logger.error(f"Error processing DICOM file: {e}")
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                    continue
+            
+            response = JsonResponse({
+                'success': True,
+                'stored_instances': stored_instances,
+                'count': len(stored_instances)
+            })
+            response['Access-Control-Allow-Origin'] = '*'
+            response['Access-Control-Allow-Methods'] = 'POST, OPTIONS'
+            response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+            return response
+        else:
+            return JsonResponse({'error': 'Unsupported content type'}, status=400)
+        
+    except Exception as e:
+        logger.error(f"Error in dicomweb_store: {e}")
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+def dicomweb_options(request):
+    """Handle OPTIONS requests for CORS preflight."""
+    from django.http import HttpResponse
+    
+    response = HttpResponse()
+    response['Access-Control-Allow-Origin'] = '*'
+    response['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
+    response['Access-Control-Max-Age'] = '86400'
+    return response
+
+
+def ohif_viewer(request, study_id):
+    """Launch OHIF viewer for a specific study."""
+    from django.shortcuts import render
+    
+    study = get_object_or_404(DICOMStudy, id=study_id)
+    
+    # Get OHIF viewer URL from settings
+    ohif_url = getattr(settings, 'OHIF_VIEWER_URL', 'http://localhost:3000')
+    
+    # Build DICOMweb root URL
+    dicomweb_root = request.build_absolute_uri('/dicomweb')
+    
+    # Build OHIF URL with study parameter
+    ohif_launch_url = f"{ohif_url}/viewer?StudyInstanceUIDs={study.study_instance_uid}&url={dicomweb_root}"
+    
+    context = {
+        'study': study,
+        'ohif_url': ohif_launch_url,
+        'dicomweb_root': dicomweb_root,
+    }
+    
+    return render(request, 'app/ohif_viewer.html', context)

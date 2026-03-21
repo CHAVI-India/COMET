@@ -1,0 +1,70 @@
+{% extends 'app/base.html' %}
+{% load static %}
+
+{% block title %}OHIF Viewer - {{ study.patient.patient_id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-0" style="height: calc(100vh - 56px);">
+    <div class="card shadow-sm mb-2">
+        <div class="card-body py-2">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h5 class="mb-0">
+                        <i class="bi bi-eye me-2"></i>OHIF Viewer
+                    </h5>
+                    <small class="text-muted">
+                        Patient: {{ study.patient.patient_id }} | Study: {{ study.study_instance_uid|slice:":20" }}...
+                    </small>
+                </div>
+                <div class="col-md-6 text-end">
+                    <a href="{% url 'study_detail' study.id %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i>Back to Study
+                    </a>
+                    <a href="{{ ohif_url }}" target="_blank" class="btn btn-sm btn-primary">
+                        <i class="bi bi-box-arrow-up-right me-1"></i>Open in New Tab
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="alert alert-info mx-3" id="ohifLoadingAlert">
+        <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <div>
+                <strong>Loading OHIF Viewer...</strong>
+                <p class="mb-0 small">Make sure OHIF is running on <code>{{ ohif_url }}</code></p>
+                <p class="mb-0 small">If OHIF is not running, open a terminal and run: <code>cd ohif-viewer && npm run dev</code></p>
+            </div>
+        </div>
+    </div>
+
+    <iframe 
+        id="ohifFrame"
+        src="{{ ohif_url }}" 
+        style="width: 100%; height: calc(100vh - 150px); border: none; display: none;"
+        onload="document.getElementById('ohifLoadingAlert').style.display='none'; this.style.display='block';"
+        onerror="document.getElementById('ohifLoadingAlert').classList.add('alert-danger'); document.getElementById('ohifLoadingAlert').classList.remove('alert-info');">
+    </iframe>
+</div>
+
+<script>
+// Monitor iframe load
+setTimeout(function() {
+    const iframe = document.getElementById('ohifFrame');
+    const alert = document.getElementById('ohifLoadingAlert');
+    
+    if (iframe.style.display === 'none') {
+        alert.classList.remove('alert-info');
+        alert.classList.add('alert-danger');
+        alert.innerHTML = `
+            <strong>Failed to load OHIF Viewer</strong>
+            <p class="mb-0">Please ensure OHIF is running on <code>{{ ohif_url }}</code></p>
+            <p class="mb-0">Start OHIF with: <code>cd ohif-viewer && npm run dev</code></p>
+        `;
+    }
+}, 5000);
+</script>
+{% endblock %}

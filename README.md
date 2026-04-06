@@ -135,39 +135,77 @@ The easiest way to run COMET is using Docker Compose with the pre-built image fr
 - Docker and Docker Compose installed
 - At least 4GB RAM available for containers
 
-### 1. Create Environment File
+
+### 1. Create the folder
+
+Create an empty folder in a directory where you wish to keep the application. 
+
+### 2. Create Environment File
 
 ```bash
 cp .env.docker .env
 ```
 
-Edit `.env` with your settings:
+Create a secret key for django. To do this, please go to the website https://djecrety.ir/ and generate a secret key. Copy this and paste it in the DJANGO_SECRET_KEY variable. 
 
-```env
-# Django Settings
-DJANGO_SECRET_KEY=your-secure-secret-key-change-this
+Edit the env file with your settings and add appropriate passwords etc. 
+
+```bash
+# COMET - Contour Metrics Docker Environment Configuration
+# Copy this file to .env and update with your production values
+# These variable names match what the application expects per sampleenv.txt
+
+# ============================================
+# Django Core Settings
+# ============================================
+DJANGO_SECRET_KEY=your-secret-key-here-change-in-production
 DJANGO_DEBUG=False
-DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,your-domain.com
+DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.1,your-domain.com
 
-# Database (PostgreSQL 17)
+# ============================================
+# Database Configuration (PostgreSQL)
+# ============================================
+DJANGO_DB_ENGINE=django.db.backends.postgresql
 DJANGO_DB_NAME=comet_db
 DJANGO_DB_USER=comet
-DJANGO_DB_PASSWORD=your-secure-db-password
+DJANGO_DB_PASSWORD=comet_secure_db_password
+DJANGO_DB_HOST=comet-db
+DJANGO_DB_PORT=5432
 
-# RabbitMQ
+# ============================================
+# RabbitMQ / Celery Configuration
+# ============================================
+DJANGO_CELERY_BROKER_URL=amqp://comet:cometpassword@comet-rabbitmq:5672//
+DJANGO_CELERY_RESULT_BACKEND=django-db
+
+# RabbitMQ Admin Credentials (for management UI)
 RABBITMQ_DEFAULT_USER=comet
-RABBITMQ_DEFAULT_PASS=your-secure-mq-password
+RABBITMQ_DEFAULT_PASS=comet_secure_mq_password
 
-# Celery (optional)
-CELERY_WORKER_CONCURRENCY=4
+# ============================================
+# Optional: Port Mappings (for docker-compose overrides)
+# ============================================
+# WEB_PORT=8000
+# RABBITMQ_PORT=5672
+# RABBITMQ_MANAGEMENT_PORT=15672
+# DB_PORT=5432
+
+# ============================================
+# Django Superuser Configuration
+# ============================================
+
+DJANGO_SUPERUSER_USERNAME=admin
+DJANGO_SUPERUSER_PASSWORD=your-secure-password
+DJANGO_SUPERUSER_EMAIL=admin@example.com
 ```
 
-### 2. Create docker-compose.yml
+### 3. Create docker-compose.yml
+
+You can copy the docker compse.yml file in this repository and use it or copy and paste the following in a new file. Please remeber to save it as a file with the appropriate name (docker compose.yml). 
 
 ```yaml
-version: '3.8'
-
 services:
+  # PostgreSQL Database
   comet-db:
     image: postgres:17
     container_name: comet-db
@@ -177,15 +215,18 @@ services:
       POSTGRES_USER: ${DJANGO_DB_USER:-comet}
       POSTGRES_PASSWORD: ${DJANGO_DB_PASSWORD:-cometpassword}
     volumes:
-      - comet_postgres_data:/var/lib/postgresql/data
+      - ./data/postgres:/var/lib/postgresql/data
+    ports:
+      - "${DB_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DJANGO_DB_USER:-comet}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DJANGO_DB_USER:-comet} -d ${DJANGO_DB_NAME:-comet_db}"]
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # RabbitMQ Message Broker
   comet-rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: rabbitmq:4.2-management
     container_name: comet-rabbitmq
     restart: unless-stopped
     environment:
@@ -194,60 +235,65 @@ services:
     volumes:
       - comet_rabbitmq_data:/var/lib/rabbitmq
     ports:
-      - "5672:5672"
-      - "15672:15672"  # Management UI
+      - "${RABBITMQ_PORT:-5672}:5672"      # AMQP port
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"  # Management UI
     healthcheck:
       test: rabbitmq-diagnostics -q ping
       interval: 5s
       timeout: 5s
       retries: 5
 
+  # Django Web Application
   comet-web:
     image: public.ecr.aws/chavi/comet:latest
     container_name: comet-web
     restart: unless-stopped
-    command: >
-      sh -c "python manage.py migrate --noinput &&
-             python manage.py collectstatic --noinput &&
-             gunicorn spatialmetrics.wsgi:application --bind 0.0.0.0:8000 --workers 4"
     env_file:
       - .env
     environment:
+      # Override host settings for Docker network
       DJANGO_DB_HOST: comet-db
       DJANGO_CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-comet}:${RABBITMQ_DEFAULT_PASS:-cometpassword}@comet-rabbitmq:5672//
     volumes:
-      - comet_media:/app/media
+      - ./data/media:/app/media
       - comet_static:/app/staticfiles
     ports:
-      - "8000:8000"
+      - "${WEB_PORT:-8000}:8000"
     depends_on:
       comet-db:
         condition: service_healthy
       comet-rabbitmq:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # Celery Worker
   comet-celery:
     image: public.ecr.aws/chavi/comet:latest
     container_name: comet-celery
     restart: unless-stopped
-    command: celery -A spatialmetrics worker -l info --concurrency 4
+    command: celery -A spatialmetrics worker -l ${CELERY_WORKER_LOG_LEVEL:-info} --concurrency ${CELERY_WORKER_CONCURRENCY:-4}
     env_file:
       - .env
     environment:
+      # Override host settings for Docker network
       DJANGO_DB_HOST: comet-db
       DJANGO_CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-comet}:${RABBITMQ_DEFAULT_PASS:-cometpassword}@comet-rabbitmq:5672//
     volumes:
-      - comet_media:/app/media
+      - ./data/media:/app/media
     depends_on:
       comet-db:
         condition: service_healthy
       comet-rabbitmq:
         condition: service_healthy
+      comet-web:
+        condition: service_healthy
 
 volumes:
-  comet_postgres_data:
   comet_rabbitmq_data:
-  comet_media:
   comet_static:
 ```
 

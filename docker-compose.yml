@@ -3,7 +3,7 @@ version: '3.8'
 services:
   # PostgreSQL Database
   comet-db:
-    image: postgres:17
+    image: postgres:18
     container_name: comet-db
     restart: unless-stopped
     environment:
@@ -22,7 +22,7 @@ services:
 
   # RabbitMQ Message Broker
   comet-rabbitmq:
-    image: rabbitmq:3.13-management-alpine
+    image: rabbitmq:4.2.5-management-alpine
     container_name: comet-rabbitmq
     restart: unless-stopped
     environment:
@@ -44,10 +44,6 @@ services:
     image: public.ecr.aws/chavi/comet:latest
     container_name: comet-web
     restart: unless-stopped
-    command: >
-      sh -c "python manage.py migrate --noinput &&
-             python manage.py collectstatic --noinput &&
-             gunicorn spatialmetrics.wsgi:application --bind 0.0.0.0:8000 --workers 4 --timeout 300 --graceful-timeout 60"
     env_file:
       - .env
     environment:

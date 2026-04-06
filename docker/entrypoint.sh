@@ -29,6 +29,12 @@ python manage.py migrate --noinput
 echo "Collecting static files..."
 python manage.py collectstatic --noinput
 
+# Create superuser if credentials are provided and user doesn't already exist
+if [ -n "$DJANGO_SUPERUSER_USERNAME" ] && [ -n "$DJANGO_SUPERUSER_PASSWORD" ]; then
+    echo "Checking for superuser..."
+    python manage.py createsuperuser --noinput 2>/dev/null && echo "Superuser created." || echo "Superuser already exists, skipping."
+fi
+
 # Create logs directory if it doesn't exist
 mkdir -p logs
 

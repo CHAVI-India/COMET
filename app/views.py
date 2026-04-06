@@ -2774,6 +2774,10 @@ def dicomweb_store(request, study_uid=None):
     from datetime import datetime
     import tempfile
     
+    logger.info(f"STOW-RS request received: method={request.method}, study_uid={study_uid}")
+    logger.info(f"Content-Type: {request.META.get('CONTENT_TYPE', 'NOT SET')}")
+    logger.info(f"Content-Length: {request.META.get('CONTENT_LENGTH', 'NOT SET')}")
+    
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
@@ -2782,16 +2786,43 @@ def dicomweb_store(request, study_uid=None):
         content_type = request.META.get('CONTENT_TYPE', '')
         
         if 'multipart/related' in content_type:
-            # Handle multipart DICOM upload
-            files = request.FILES.getlist('file')
+            # Parse multipart/related body (not form-encoded)
+            import email
+            from email import policy
+            
+            # Get the boundary from Content-Type header
+            boundary = None
+            for part in content_type.split(';'):
+                part = part.strip()
+                if part.startswith('boundary='):
+                    boundary = part.split('=', 1)[1].strip('"')
+                    break
+            
+            if not boundary:
+                logger.error("No boundary found in Content-Type header")
+                return JsonResponse({'error': 'Invalid multipart/related content'}, status=400)
+            
+            # Parse the multipart message
+            body = request.body
+            msg = email.message_from_bytes(
+                b'Content-Type: ' + content_type.encode() + b'\r\n\r\n' + body,
+                policy=policy.default
+            )
             
             stored_instances = []
             
-            for uploaded_file in files:
+            # Iterate through parts
+            for part in msg.iter_parts():
+                # Get the part content
+                part_content = part.get_payload(decode=True)
+                
+                if not part_content or len(part_content) < 100:
+                    # Skip empty or very small parts (likely metadata)
+                    continue
+                
                 # Save to temporary file
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.dcm') as tmp_file:
-                    for chunk in uploaded_file.chunks():
-                        tmp_file.write(chunk)
+                    tmp_file.write(part_content)
                     tmp_path = tmp_file.name
                 
                 try:

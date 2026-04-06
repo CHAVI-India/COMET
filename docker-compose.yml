@@ -4,6 +4,8 @@ services:
     image: postgres:17
     container_name: comet-db
     restart: unless-stopped
+    env_file:
+      - .env    
     environment:
       POSTGRES_DB: ${DJANGO_DB_NAME:-comet_db}
       POSTGRES_USER: ${DJANGO_DB_USER:-comet}
@@ -23,6 +25,8 @@ services:
     image: rabbitmq:4.2-management
     container_name: comet-rabbitmq
     restart: unless-stopped
+    env_file:
+      - .env    
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-comet}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-cometpassword}

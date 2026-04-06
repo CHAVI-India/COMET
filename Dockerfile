@@ -24,7 +24,7 @@ RUN apt-get update -qq && apt-get install -y --no-install-recommends \
 
 # Create app user and directories
 RUN groupadd -r comet && useradd -r -g comet comet \
-    && mkdir -p /app /app/media /app/static /app/logs \
+    && mkdir -p /app /app/media /app/static /app/staticfiles /app/logs \
     && chown -R comet:comet /app
 
 # Set work directory

@@ -91,7 +91,6 @@ db.sqlite3
 venv/
 dicom_files/
 *.dcm
-*.png
 media/dicom_zip_files/
 media/nifti_files/
 media/visualizations/

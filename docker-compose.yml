@@ -52,6 +52,7 @@ services:
       # Override host settings for Docker network
       DJANGO_DB_HOST: comet-db
       DJANGO_CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-comet}:${RABBITMQ_DEFAULT_PASS:-cometpassword}@comet-rabbitmq:5672//
+      COMET_SERVICE: web
     volumes:
       - ./data/media:/app/media
       - comet_static:/app/staticfiles
@@ -73,13 +74,13 @@ services:
     image: public.ecr.aws/chavi/comet:latest
     container_name: comet-celery
     restart: unless-stopped
-    command: celery -A spatialmetrics worker -l ${CELERY_WORKER_LOG_LEVEL:-info} --concurrency ${CELERY_WORKER_CONCURRENCY:-4}
     env_file:
       - .env
     environment:
       # Override host settings for Docker network
       DJANGO_DB_HOST: comet-db
       DJANGO_CELERY_BROKER_URL: amqp://${RABBITMQ_DEFAULT_USER:-comet}:${RABBITMQ_DEFAULT_PASS:-cometpassword}@comet-rabbitmq:5672//
+      COMET_SERVICE: celery
     volumes:
       - ./data/media:/app/media
     depends_on:

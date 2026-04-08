@@ -1,3 +1,6 @@
+# Video demonstration
+
+[![COMET Demonstration Video](https://img.youtube.com/vi/UjGWuQtW80I/0.jpg)](https://www.youtube.com/watch?v=UjGWuQtW80I)
 
 [![DOI](https://zenodo.org/badge/1175037586.svg)](https://doi.org/10.5281/zenodo.19044313)
 

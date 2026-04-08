@@ -14,8 +14,8 @@ import numpy as np
 from django.conf import settings
 from django.db import transaction
 from dcmrtstruct2nii.adapters.convert.rtstructcontour2mask import DcmPatientCoords2Mask
-from dcmrtstruct2nii.adapters.input.contours.rtstructinputadapter import (
-    RtStructInputAdapter,
+from app.utils.patched_rtstructinputadapter import (
+    PatchedRtStructInputAdapter as RtStructInputAdapter,
 )
 from dcmrtstruct2nii.adapters.input.image.dcminputadapter import DcmInputAdapter
 from dcmrtstruct2nii.adapters.output.niioutputadapter import NiiOutputAdapter

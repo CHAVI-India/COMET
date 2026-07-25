@@ -40,6 +40,10 @@ def dice_similarity(volume1, volume2):
     """
     Calculate Dice Similarity Coefficient between two binary volumes.
 
+    Formula:
+        DSC = (2 * |Reference ROI ∩ Evaluation ROI|) / (|Reference ROI| + |Evaluation ROI|)
+        where Reference ROI and Evaluation ROI are the sets of foreground voxels in volume1 and volume2.
+
     Args:
         volume1 (numpy.ndarray): First binary volume.
         volume2 (numpy.ndarray): Second binary volume.
@@ -60,6 +64,10 @@ def jaccard_similarity(volume1, volume2):
     """
     Calculate Jaccard Similarity Coefficient between two binary volumes.
 
+    Formula:
+        Jaccard = |Reference ROI ∩ Evaluation ROI| / |Reference ROI ∪ Evaluation ROI|
+        where Reference ROI and Evaluation ROI are the sets of foreground voxels in volume1 and volume2.
+
     Args:
         volume1 (numpy.ndarray): First binary volume.
         volume2 (numpy.ndarray): Second binary volume.
@@ -79,6 +87,10 @@ def volume_overlap_error(volume1, volume2):
     """
     Calculate Volume Overlap Error between two binary volumes.
 
+    Formula:
+        VOE = 1 - (|Reference ROI ∩ Evaluation ROI| / |Reference ROI ∪ Evaluation ROI|)
+        where Reference ROI and Evaluation ROI are the sets of foreground voxels in volume1 and volume2.
+
     Args:
         volume1 (numpy.ndarray): First binary volume.
         volume2 (numpy.ndarray): Second binary volume.
@@ -97,6 +109,10 @@ def volume_overlap_error(volume1, volume2):
 def variation_of_information(volume1, volume2):
     """
     Calculate Variation of Information between two binary volumes.
+
+    Formula:
+        VI = H(A) + H(B) - 2 * MI(A, B)
+        where H is entropy and MI is mutual information computed from voxel labels.
 
     Args:
         volume1 (numpy.ndarray): First binary volume.
@@ -119,6 +135,10 @@ def cosine_similarity(volume1, volume2):
     """
     Calculate Cosine Similarity between two binary volumes.
 
+    Formula:
+        Cosine = (Reference ROI · Evaluation ROI) / (||Reference ROI|| * ||Evaluation ROI||)
+        where Reference ROI and Evaluation ROI are flattened binary volumes treated as vectors.
+
     Args:
         volume1 (numpy.ndarray): First binary volume.
         volume2 (numpy.ndarray): Second binary volume.
@@ -135,6 +155,10 @@ def cosine_similarity(volume1, volume2):
 def compute_volume(volume, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate the volume of a binary mask in cubic centimeters (cm³).
+
+    Formula:
+        Volume = N * (sx * sy * sz) / 1000
+        where N is the number of foreground voxels and sx, sy, sz are voxel spacings in mm.
 
     Args:
         volume (numpy.ndarray): Binary volume.
@@ -161,8 +185,13 @@ def compute_volume(volume, spacing=(1.0, 1.0, 1.0)):
 def surface_dsc(volume1, volume2, tau=3.0, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Surface Dice Similarity Coefficient between two binary volumes.
-    
-    From: Nikolov S et al. Clinically Applicable Segmentation of Head and Neck Anatomy for
+
+    Formula:
+        SurfaceDSC = (|EvaluationSurface ∩ d(ReferenceSurface) ≤ τ| + |ReferenceSurface ∩ d(EvaluationSurface) ≤ τ|)
+                     / (|ReferenceSurface| + |EvaluationSurface|)
+        where d(X) is the distance transform to surface X and τ is the tolerance in mm.
+
+    Reference: Nikolov S et al. Clinically Applicable Segmentation of Head and Neck Anatomy for
     Radiotherapy: Deep Learning Algorithm Development and Validation Study J Med Internet Res
     2021;23(7):e26151, DOI: 10.2196/26151
 
@@ -219,9 +248,11 @@ def surface_dsc(volume1, volume2, tau=3.0, spacing=(1.0, 1.0, 1.0)):
 def mean_distance_to_conformity(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Mean Distance to Conformity between two binary volumes.
-    
-    MDC measures the average distance from voxels in the symmetric difference
-    (XOR) of two volumes to the nearest boundary of the other volume.
+
+    Formula:
+        MDC = (mean(D_under) + mean(D_over)) / 2
+        where D_under are axis-aligned distances from voxels in (Reference ROI minus Evaluation ROI) to Evaluation ROI, and D_over are axis-aligned distances from voxels in (Evaluation ROI minus Reference ROI) to Reference ROI.
+        
 
     Args:
         volume1 (numpy.ndarray): Reference binary volume.
@@ -264,7 +295,11 @@ def mean_distance_to_conformity(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
 def hausdorff_distance_95(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Hausdorff Distance 95th percentile between two binary volumes.
-    Uses SimpleITK methods matching PlatiPy's implementation exactly.
+
+    Formula:
+        HD95 = 95th percentile([max(d(ReferenceSurface, EvaluationROI)), max(d(EvaluationSurface, ReferenceROI))])
+        where d(X_surface, Y) is the minimum distance from each point on surface X
+        to surface Y.
 
     Args:
         volume1 (numpy.ndarray): First binary volume.
@@ -309,7 +344,12 @@ def hausdorff_distance_95(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
 def mean_surface_distance(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Mean Surface Distance between two binary volumes.
-    Uses SimpleITK methods matching PlatiPy's implementation exactly.
+
+    Formula:
+        MSD = (mean(d(ReferenceSurface, EvaluationROI)) * |ReferenceSurface| + mean(d(EvaluationSurface, ReferenceROI)) * |EvaluationSurface|)
+              / (|ReferenceSurface| + |EvaluationSurface|)
+        where d(X_surface, Y) is the minimum distance from surface X to surface Y,
+        weighted by the number of surface points.
 
     Args:
         volume1 (numpy.ndarray): First binary volume.
@@ -356,7 +396,10 @@ def mean_surface_distance(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
 def added_path_length(volume1, volume2, distance_threshold_mm=3, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Added Path Length between two binary volumes.
-    Measures the total contour length in the reference that is missing in the test segmentation.
+
+    Formula:
+        APL = Σ_s (|ReferenceContour_s \ Dilated(TestContour_s, τ)|) * mean(sx, sy)
+        where the sum is over axial slices s and τ is the distance threshold in mm.
 
     Args:
         volume1 (numpy.ndarray): Reference binary volume.
@@ -490,7 +533,13 @@ def _calculate_axis_aligned_distance(test_coords, ref_volume, spacing):
 def undercontouring_mean_distance_to_conformity(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Undercontouring Mean Distance to Conformity (UMDC).
-    
+
+    Formula:
+        UMDC = mean(axis_aligned_distance(p, Evaluation ROI)) for all p in (Reference ROI minus Evaluation ROI)
+        where Reference ROI is the reference volume, Evaluation ROI is the test volume, and p are under-segmented voxels.
+        "Reference ROI minus Evaluation ROI" means voxels that are in the Reference ROI but not in
+        the Evaluation ROI.
+
     Args:
         volume1 (numpy.ndarray): Reference binary volume.
         volume2 (numpy.ndarray): Test binary volume.
@@ -517,7 +566,13 @@ def undercontouring_mean_distance_to_conformity(volume1, volume2, spacing=(1.0, 
 def overcontouring_mean_distance_to_conformity(volume1, volume2, spacing=(1.0, 1.0, 1.0)):
     """
     Calculate Overcontouring Mean Distance to Conformity (OMDC).
-    
+minus
+    Formula:.
+        "Evaluation ROI minus Reference ROI" means voxels that are in the Evaluation ROI but not in
+        the Reference ROI
+        OMDC = mean(axis_aligned_distance(p, Reference ROI)) for all p in (Evaluation ROI \ Reference ROI)
+        where Reference ROI is the reference volume, Evaluation ROI is the test volume, and p are over-segmented voxels.
+
     Args:
         volume1 (numpy.ndarray): Reference binary volume.
         volume2 (numpy.ndarray): Test binary volume.

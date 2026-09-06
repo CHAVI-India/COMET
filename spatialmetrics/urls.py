@@ -17,13 +17,17 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
+from django.contrib.auth import views as auth_views
 from django.urls import path, include, re_path
 from django.views.static import serve
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("celery-progress/", include("celery_progress.urls")),
+    path("accounts/login/", auth_views.LoginView.as_view(), name="login"),
+    path("accounts/logout/", auth_views.LogoutView.as_view(), name="logout"),
     path("", include("app.urls")),
+    path("segmentation/", include("segmentation.urls")),
     # Serve media files - works in both DEBUG=True and DEBUG=False
     # For production deployment, consider using nginx/Apache for better performance
     re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),

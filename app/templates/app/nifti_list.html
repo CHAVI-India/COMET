@@ -122,19 +122,25 @@
                             <strong>{{ img_data.series.modality }}</strong> | 
                             <code>{{ img_data.series.series_instance_uid|truncatechars:50 }}</code>
                             <div class="float-end">
-                                <a href="{% url 'visualize_niivue' img_data.series.id %}" 
+                                <a href="{% url 'visualize_niivue' img_data.series.id %}"
                                    class="btn btn-sm btn-primary me-1"
                                    title="WebGL Viewer (Fast, GPU-accelerated)">
                                     <i class="bi bi-gpu-card me-1"></i>WebGL
                                 </a>
-                                <button type="button" 
-                                        class="btn btn-sm btn-outline-primary visualize-btn" 
+                                <button type="button"
+                                        class="btn btn-sm btn-outline-primary visualize-btn me-1"
                                         data-series-id="{{ img_data.series.id }}"
                                         data-patient-id="{{ patient_data.patient.patient_id }}"
                                         data-modality="{{ img_data.series.modality }}"
                                         title="Matplotlib Viewer (Legacy)">
                                     <i class="bi bi-eye me-1"></i>Matplotlib
                                 </button>
+                                {% if img_data.series.modality in "CT,MR,PET" %}
+                                <a href="{% url 'seg_editor' img_data.series.id %}" class="btn btn-sm btn-success"
+                                   title="Open Segmentation Editor">
+                                    <i class="bi bi-brush me-1"></i>Segment
+                                </a>
+                                {% endif %}
                             </div>
                         </small>
                     </div>
@@ -175,19 +181,12 @@
                                     </span>
                                 </td>
                                 <td class="text-center">
-                                    <button class="btn btn-sm btn-outline-info view-rois-btn" 
+                                    <button class="btn btn-sm btn-outline-info view-rois-btn"
                                             type="button"
-                                            data-bs-toggle="collapse" 
+                                            data-bs-toggle="collapse"
                                             data-bs-target="#rois-{{ ss.series_id }}">
                                         <i class="bi bi-list-ul me-1"></i>View ROIs
                                     </button>
-                                    {% if ss.instance_id %}
-                                    <a href="{% url 'segmentation_editor' ss.instance_id %}" 
-                                       class="btn btn-sm btn-success ms-1"
-                                       title="Open Segmentation Editor">
-                                        <i class="bi bi-brush me-1"></i>Segment
-                                    </a>
-                                    {% endif %}
                                 </td>
                             </tr>
                             <tr class="collapse" id="rois-{{ ss.series_id }}">

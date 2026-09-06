@@ -141,7 +141,12 @@
                             {% endif %}
                         </div>
                         <div class="col-md-3 text-end">
-                            <span class="badge bg-info">{{ item.rtstruct_series|length }} RT Struct{{ item.rtstruct_series|length|pluralize }}</span>
+                            <span class="badge bg-info me-1">{{ item.rtstruct_series|length }} RT Struct{{ item.rtstruct_series|length|pluralize }}</span>
+                            {% if item.referenced_series.modality in "CT,MR,PET" %}
+                            <a href="{% url 'seg_editor' item.referenced_series.id %}" class="btn btn-sm btn-success">
+                                <i class="bi bi-brush me-1"></i>Segment
+                            </a>
+                            {% endif %}
                         </div>
                     </div>
                 </div>

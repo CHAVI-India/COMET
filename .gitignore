@@ -98,3 +98,8 @@ logs/
 platipy_test_data/
 platipy_custom_metrics_comparison.csv
 ohif-viewer
+
+# Segmentation frontend build artifacts
+segmentation/frontend/node_modules/
+segmentation/frontend/.vite/
+segmentation/static/segmentation/bundle/

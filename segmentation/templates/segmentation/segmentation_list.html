@@ -1,0 +1,59 @@
+{% extends 'app/base.html' %}
+{% block title %}My Segmentations{% endblock %}
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Home
+    </a>
+</div>
+<div class="card shadow">
+    <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-brush me-2"></i>My Segmentations</h4>
+    </div>
+    <div class="card-body">
+        {% if sessions %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Patient</th>
+                        <th>Modality</th>
+                        <th>Series UID</th>
+                        <th class="text-center">Segmentations</th>
+                        <th>Last Modified</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for session in sessions %}
+                    <tr>
+                        <td>{{ session.image_series.study.patient.patient_id }}</td>
+                        <td><span class="badge bg-secondary">{{ session.image_series.modality }}</span></td>
+                        <td><code>{{ session.image_series.series_instance_uid|truncatechars:40 }}</code></td>
+                        <td class="text-center"><span class="badge bg-info">{{ session.segmentations.count }}</span></td>
+                        <td><small>{{ session.modified_at|date:"Y-m-d H:i" }}</small></td>
+                        <td class="text-center">
+                            <a href="{% url 'seg_session_detail' session.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye me-1"></i>View
+                            </a>
+                            <a href="{% url 'seg_editor' session.image_series.id %}" class="btn btn-sm btn-success">
+                                <i class="bi bi-brush me-1"></i>Continue
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <i class="bi bi-brush display-4 text-muted"></i>
+            <p class="mt-2 text-muted">No segmentation sessions yet. Open an image series and click "Segment" to start.</p>
+            <a href="{% url 'roi_list' %}" class="btn btn-primary">
+                <i class="bi bi-images me-1"></i>Browse Image Series
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

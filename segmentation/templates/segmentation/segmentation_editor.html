@@ -1,0 +1,25 @@
+{% extends 'app/base.html' %}
+{% load static %}
+{% block title %}Segmentation Editor{% endblock %}
+{% block content %}
+<div class="mb-3">
+    <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to Home
+    </a>
+</div>
+<div class="card shadow">
+    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">
+            <i class="bi bi-brush me-2"></i>Segmentation Editor
+            <small class="ms-2 text-light">Patient: {{ patient.patient_id }} | Modality: {{ series.modality }}</small>
+        </h5>
+    </div>
+    <div class="card-body p-0" id="seg-editor-container" style="height: 600px; min-height: 600px;">
+        <div id="seg-viewer" style="width: 100%; height: 100%; background: #000;"></div>
+    </div>
+</div>
+<script>
+window.SEG_SERIES_ID = {{ series.id }};
+</script>
+<script type="module" src="{% static 'segmentation/bundle/segmentation-editor.js' %}"></script>
+{% endblock %}

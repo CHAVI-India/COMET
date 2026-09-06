@@ -1,0 +1,151 @@
+{% extends 'app/base.html' %}
+{% block title %}Segmentation Session Detail{% endblock %}
+{% block content %}
+<div class="mb-4">
+    <a href="{% url 'seg_sessions_list' %}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Back to My Segmentations
+    </a>
+</div>
+<div class="card shadow mb-4">
+    <div class="card-header bg-info text-white">
+        <h5 class="mb-0">
+            <i class="bi bi-info-circle me-2"></i>Session: {{ session.image_series.study.patient.patient_id }}
+            <small class="ms-2 text-light">| {{ session.image_series.modality }}</small>
+        </h5>
+    </div>
+    <div class="card-body">
+        <table class="table table-sm table-borderless mb-0">
+            <tr>
+                <td class="text-muted">Series UID:</td>
+                <td><code>{{ session.image_series.series_instance_uid }}</code></td>
+            </tr>
+            <tr>
+                <td class="text-muted">Created:</td>
+                <td>{{ session.created_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+            <tr>
+                <td class="text-muted">Modified:</td>
+                <td>{{ session.modified_at|date:"Y-m-d H:i" }}</td>
+            </tr>
+        </table>
+    </div>
+</div>
+
+<div class="card shadow">
+    <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i>Segmentations ({{ segmentations|length }})</h5>
+    </div>
+    <div class="card-body">
+        {% if segmentations %}
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>ROI Name</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Modified</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for seg in segmentations %}
+                    <tr id="seg-row-{{ seg.id }}">
+                        <td class="seg-name-{{ seg.id }}">{{ seg.roi_name }}</td>
+                        <td>
+                            {% if seg.finalized %}
+                            <span class="badge bg-success">Finalized</span>
+                            {% else %}
+                            <span class="badge bg-warning text-dark">Draft</span>
+                            {% endif %}
+                        </td>
+                        <td><small>{{ seg.created_at|date:"Y-m-d H:i" }}</small></td>
+                        <td><small>{{ seg.modified_at|date:"Y-m-d H:i" }}</small></td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-warning btn-rename" data-id="{{ seg.id }}" data-name="{{ seg.roi_name }}">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-sm btn-outline-info btn-duplicate" data-id="{{ seg.id }}">
+                                <i class="bi bi-files"></i>
+                            </button>
+                            <a href="{% url 'seg_export_rtstruct' seg.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-file-earmark-medical" title="Export RTSTRUCT"></i>
+                            </a>
+                            <a href="{% url 'seg_export_nifti' seg.id %}" class="btn btn-sm btn-outline-success">
+                                <i class="bi bi-file-earmark-zip" title="Export NIfTI"></i>
+                            </a>
+                            <button class="btn btn-sm btn-outline-danger btn-delete" data-id="{{ seg.id }}" data-name="{{ seg.roi_name }}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center py-4">
+            <p class="text-muted">No segmentations in this session yet.</p>
+            <a href="{% url 'seg_editor' session.image_series.id %}" class="btn btn-success">
+                <i class="bi bi-brush me-1"></i>Start Segmenting
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function getCsrfToken() {
+    return document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
+}
+
+document.querySelectorAll('.btn-rename').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const id = btn.dataset.id;
+        const newName = prompt('Enter new ROI name:', btn.dataset.name);
+        if (!newName) return;
+        fetch(`/segmentation/api/segmentation/${id}/rename/`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+            body: JSON.stringify({roi_name: newName})
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                document.querySelector(`.seg-name-${id}`).textContent = data.roi_name;
+                btn.dataset.name = data.roi_name;
+            } else {
+                alert('Rename failed: ' + (data.error || 'unknown'));
+            }
+        });
+    });
+});
+
+document.querySelectorAll('.btn-duplicate').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (!confirm('Duplicate this segmentation?')) return;
+        fetch(`/segmentation/api/segmentation/${btn.dataset.id}/duplicate/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()}
+        }).then(r => r.json()).then(data => {
+            if (data.success) location.reload();
+            else alert('Duplicate failed: ' + (data.error || 'unknown'));
+        });
+    });
+});
+
+document.querySelectorAll('.btn-delete').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (!confirm(`Delete segmentation "${btn.dataset.name}"? This cannot be undone.`)) return;
+        fetch(`/segmentation/api/segmentation/${btn.dataset.id}/delete/`, {
+            method: 'POST',
+            headers: {'X-CSRFToken': getCsrfToken()}
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                document.getElementById(`seg-row-${btn.dataset.id}`)?.remove();
+            } else {
+                alert('Delete failed: ' + (data.error || 'unknown'));
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

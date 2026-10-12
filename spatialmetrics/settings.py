@@ -134,6 +134,11 @@ USE_TZ = True
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/"
 
+# App-specific cookie names: cookies are scoped by host, not port, so other
+# Django apps on the same host with default names would clobber these.
+SESSION_COOKIE_NAME = 'spatialmetrics_sessionid'
+CSRF_COOKIE_NAME = 'spatialmetrics_csrftoken'
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/

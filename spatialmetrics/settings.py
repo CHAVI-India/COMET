@@ -76,6 +76,12 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                # Required so the {{ csrf_token }} template variable renders a real
+                # token (the {% csrf_token %} tag always works, but the *variable*
+                # needs this processor). The shared CSRF helper in app/base.html
+                # falls back to this value when no hidden csrfmiddlewaretoken input
+                # is present on the page.
+                'django.template.context_processors.csrf',
             ],
         },
     },

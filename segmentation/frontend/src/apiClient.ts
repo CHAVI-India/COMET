@@ -7,11 +7,23 @@ export interface RoiPayload {
   shape: number[];
 }
 
+/**
+ * Resolve the CSRF token for XHR/fetch POSTs.
+ *
+ * Cookie-name independent: it never parses document.cookie by a hard-coded name
+ * (the server may set a custom CSRF_COOKIE_NAME). Resolution order:
+ *   1. the shared window.getCsrfToken() helper from app/base.html, which prefers
+ *      the server-rendered hidden `csrfmiddlewaretoken` input and then falls back
+ *      to the server-rendered `{{ csrf_token }}` value;
+ *   2. a direct read of the hidden `csrfmiddlewaretoken` input.
+ * Returns '' if nothing resolves (callers should treat that as a failure).
+ */
 export function getCsrfToken(): string {
-  const cookie = document.cookie
-    .split('; ')
-    .find((row) => row.startsWith('csrftoken='));
-  return cookie ? cookie.split('=')[1] : '';
+  if (typeof window !== 'undefined' && typeof (window as any).getCsrfToken === 'function') {
+    return (window as any).getCsrfToken();
+  }
+  const el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+  return el ? el.value : '';
 }
 
 async function gzipBytes(input: Uint8Array): Promise<ArrayBuffer> {

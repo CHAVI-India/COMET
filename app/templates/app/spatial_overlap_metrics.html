@@ -903,23 +903,17 @@ function computeMetrics() {
     computeBtn.disabled = true;
     computeBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Starting computation...';
     
-    // Get CSRF token from cookie
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
+    // Get the CSRF token via the shared, cookie-name-independent helper
+    // (resolves the server-rendered hidden `csrfmiddlewaretoken` input, then the
+    // server-rendered `{{ csrf_token }}` value). Never reads document.cookie by name.
+    const csrftoken = getCsrfToken();
+    if (!csrftoken) {
+        computeBtn.disabled = false;
+        computeBtn.innerHTML = '<i class="bi bi-calculator me-2"></i>Compute All Metrics';
+        showError('CSRF token missing - cannot start computation. Reload the page and try again.');
+        return;
     }
-    const csrftoken = getCookie('csrftoken');
-    console.log('CSRF token:', csrftoken);
+    console.log('CSRF token resolved.');
     
     // Start the Celery task
     console.log('Sending request to /metrics/compute-overlap/');

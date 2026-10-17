@@ -38,6 +38,33 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <!-- Shared, cookie-name-independent CSRF resolver.
+         Resolution order: (1) the server-rendered hidden csrfmiddlewaretoken input,
+         then (2) the server-rendered csrf_token variable (enabled via the
+         django.template.context_processors.csrf context processor).
+         It never parses document.cookie by name. If nothing resolves it is
+         LOUD (logs) instead of silently sending an empty token. -->
+    <script>
+    (function () {
+        window.getCsrfToken = function () {
+            var el = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            if (el && el.value) {
+                return el.value;
+            }
+            var rendered = "{{ csrf_token }}";
+            if (rendered) {
+                return rendered;
+            }
+            console.error(
+                '[CSRF] No valid CSRF token could be resolved. Ensure a hidden '
+                + 'csrfmiddlewaretoken input is present on this page and '
+                + 'django.template.context_processors.csrf is enabled. '
+                + 'Refusing to send an empty X-CSRFToken header.'
+            );
+            return '';
+        };
+    })();
+    </script>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="{% url 'home' %}">

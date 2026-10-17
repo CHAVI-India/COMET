@@ -95,18 +95,20 @@
 </div>
 
 <script>
-function getCsrfToken() {
-    return document.cookie.split('; ').find(r => r.startsWith('csrftoken='))?.split('=')[1] || '';
-}
+// CSRF is resolved by the shared getCsrfToken() helper defined in app/base.html
+// (server-rendered hidden `csrfmiddlewaretoken` input, then `{{ csrf_token }}`).
+// Cookie-name independent; never reads document.cookie by name.
+const csrfToken = getCsrfToken();
 
 document.querySelectorAll('.btn-rename').forEach(btn => {
     btn.addEventListener('click', () => {
         const id = btn.dataset.id;
         const newName = prompt('Enter new ROI name:', btn.dataset.name);
         if (!newName) return;
+        if (!csrfToken) { alert('CSRF token missing - reload the page.'); return; }
         fetch(`/segmentation/api/segmentation/${id}/rename/`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json', 'X-CSRFToken': getCsrfToken()},
+            headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrfToken},
             body: JSON.stringify({roi_name: newName})
         }).then(r => r.json()).then(data => {
             if (data.success) {
@@ -122,9 +124,10 @@ document.querySelectorAll('.btn-rename').forEach(btn => {
 document.querySelectorAll('.btn-duplicate').forEach(btn => {
     btn.addEventListener('click', () => {
         if (!confirm('Duplicate this segmentation?')) return;
+        if (!csrfToken) { alert('CSRF token missing - reload the page.'); return; }
         fetch(`/segmentation/api/segmentation/${btn.dataset.id}/duplicate/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCsrfToken()}
+            headers: {'X-CSRFToken': csrfToken}
         }).then(r => r.json()).then(data => {
             if (data.success) location.reload();
             else alert('Duplicate failed: ' + (data.error || 'unknown'));
@@ -135,9 +138,10 @@ document.querySelectorAll('.btn-duplicate').forEach(btn => {
 document.querySelectorAll('.btn-delete').forEach(btn => {
     btn.addEventListener('click', () => {
         if (!confirm(`Delete segmentation "${btn.dataset.name}"? This cannot be undone.`)) return;
+        if (!csrfToken) { alert('CSRF token missing - reload the page.'); return; }
         fetch(`/segmentation/api/segmentation/${btn.dataset.id}/delete/`, {
             method: 'POST',
-            headers: {'X-CSRFToken': getCsrfToken()}
+            headers: {'X-CSRFToken': csrfToken}
         }).then(r => r.json()).then(data => {
             if (data.success) {
                 document.getElementById(`seg-row-${btn.dataset.id}`)?.remove();
